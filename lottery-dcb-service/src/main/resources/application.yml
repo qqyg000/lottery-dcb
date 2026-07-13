@@ -1,0 +1,36 @@
+server:
+  port: ${SERVER_PORT:8080}
+  shutdown: graceful
+
+spring:
+  application:
+    name: lottery-dcb
+  servlet:
+    encoding:
+      charset: UTF-8
+      enabled: true
+      force: true
+  lifecycle:
+    timeout-per-shutdown-phase: 10s
+
+lottery:
+  history:
+    file-path: ${LOTTERY_HISTORY_FILE:./config/ssq-history.json}
+    source-url: ${LOTTERY_HISTORY_SOURCE_URL:https://www.cwl.gov.cn/cwl_admin/front/cwlkj/search/kjxx/findDrawNotice}
+    referer: https://www.cwl.gov.cn/ygkj/wqkjgg/
+    update-enabled: ${LOTTERY_HISTORY_UPDATE_ENABLED:true}
+    page-size: 100
+    initial-max-pages: 100
+    incremental-max-pages: 100
+    max-retries: 2
+    connect-timeout: 5s
+    request-timeout: 12s
+    retry-delay: 600ms
+
+logging:
+  charset:
+    console: UTF-8
+    file: UTF-8
+  level:
+    root: INFO
+    cn.lotterydcb: INFO

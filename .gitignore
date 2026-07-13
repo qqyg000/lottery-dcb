@@ -1,0 +1,36 @@
+# Java 与 Maven
+target/
+*.class
+*.jar
+*.war
+*.log
+logs/
+
+# 前端依赖与产物
+node_modules/
+dist/
+.vite/
+npm-debug.log*
+yarn-debug.log*
+pnpm-debug.log*
+
+# 运行期外部配置
+config/ssq-history.json
+config/ssq-history.json.broken-*
+config/*.tmp
+
+# IDE
+.idea/
+*.iml
+.vscode/
+.classpath
+.project
+.settings/
+
+# 操作系统
+.DS_Store
+Thumbs.db
+
+# 测试与覆盖率
+coverage/
+*.hprof

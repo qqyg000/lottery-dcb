@@ -1,0 +1,54 @@
+<!doctype html>
+<html lang="zh-CN">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta name="color-scheme" content="light" />
+    <link rel="icon" href="/favicon.svg" type="image/svg+xml" />
+    <title>lottery-dcb · 前端资源提示</title>
+    <style>
+      * { box-sizing: border-box; }
+      body {
+        display: grid;
+        min-height: 100vh;
+        margin: 0;
+        place-items: center;
+        background: #f3f1eb;
+        color: #171a22;
+        font-family: system-ui, "Microsoft YaHei", sans-serif;
+      }
+      main {
+        width: min(680px, calc(100% - 32px));
+        padding: 44px;
+        border: 1px solid #d8d4ca;
+        background: #fff;
+        box-shadow: 0 20px 60px rgb(30 35 48 / 8%);
+      }
+      b { color: #bd2634; font: 12px ui-monospace, monospace; letter-spacing: .12em; }
+      h1 { margin: 14px 0 12px; font-size: clamp(28px, 6vw, 48px); }
+      p { color: #626775; line-height: 1.8; }
+      pre {
+        overflow-x: auto;
+        margin: 24px 0 0;
+        padding: 18px;
+        background: #171a22;
+        color: #f8f7f2;
+        font: 13px/1.8 ui-monospace, monospace;
+      }
+      a { color: #164b9b; }
+    </style>
+  </head>
+  <body>
+    <main>
+      <b>LOTTERY-DCB / DEVELOPMENT MODE</b>
+      <h1>后端已启动，前端尚未编译</h1>
+      <p>
+        当前运行方式没有生成 Vue 静态资源。使用下方的一体化命令后，访问
+        <a href="http://localhost:8080">http://localhost:8080</a> 即可打开完整页面
+      </p>
+      <pre>mvn clean package
+java -jar lottery-dcb-service/target/lottery-dcb.jar</pre>
+      <p>前后端分离开发时，请运行 <code>npm run dev</code> 并访问 Vite 输出的地址</p>
+    </main>
+  </body>
+</html>

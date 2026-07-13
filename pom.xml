@@ -1,0 +1,38 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<project xmlns="http://maven.apache.org/POM/4.0.0"
+         xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+         xsi:schemaLocation="http://maven.apache.org/POM/4.0.0 https://maven.apache.org/xsd/maven-4.0.0.xsd">
+    <modelVersion>4.0.0</modelVersion>
+
+    <parent>
+        <groupId>org.springframework.boot</groupId>
+        <artifactId>spring-boot-starter-parent</artifactId>
+        <version>4.1.0</version>
+        <relativePath/>
+    </parent>
+
+    <groupId>cn.lotterydcb</groupId>
+    <artifactId>lottery-dcb</artifactId>
+    <version>1.0.0</version>
+    <packaging>pom</packaging>
+
+    <name>lottery-dcb</name>
+    <description>双色球组合筛选与旋转矩阵工具</description>
+
+    <modules>
+        <module>lottery-dcb-service</module>
+    </modules>
+
+    <properties>
+        <java.version>17</java.version>
+        <project.build.sourceEncoding>UTF-8</project.build.sourceEncoding>
+        <project.reporting.outputEncoding>UTF-8</project.reporting.outputEncoding>
+        <maven.compiler.encoding>UTF-8</maven.compiler.encoding>
+        <gson.version>2.14.0</gson.version>
+        <frontend-maven-plugin.version>2.0.1</frontend-maven-plugin.version>
+        <node.version>v22.18.0</node.version>
+        <npm.version>10.9.3</npm.version>
+        <skip.frontend>false</skip.frontend>
+    </properties>
+
+</project>

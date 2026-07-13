@@ -1,0 +1,62 @@
+{
+  "schemaVersion": 1,
+  "source": "中国福利彩票官网",
+  "updatedAt": "2026-07-09T14:00:00Z",
+  "initialSyncCompleted": false,
+  "records": [
+    {
+      "issue": "2026078",
+      "drawDate": "2026-07-09",
+      "redBalls": [7, 11, 14, 16, 27, 28],
+      "blueBall": 6
+    },
+    {
+      "issue": "2026077",
+      "drawDate": "2026-07-07",
+      "redBalls": [1, 4, 5, 14, 18, 25],
+      "blueBall": 4
+    },
+    {
+      "issue": "2026076",
+      "drawDate": "2026-07-05",
+      "redBalls": [1, 3, 19, 20, 24, 25],
+      "blueBall": 7
+    },
+    {
+      "issue": "2026075",
+      "drawDate": "2026-07-02",
+      "redBalls": [8, 12, 18, 21, 24, 30],
+      "blueBall": 1
+    },
+    {
+      "issue": "2026074",
+      "drawDate": "2026-06-30",
+      "redBalls": [2, 23, 24, 26, 28, 32],
+      "blueBall": 4
+    },
+    {
+      "issue": "2026073",
+      "drawDate": "2026-06-28",
+      "redBalls": [9, 10, 13, 16, 19, 21],
+      "blueBall": 8
+    },
+    {
+      "issue": "2026072",
+      "drawDate": "2026-06-25",
+      "redBalls": [7, 8, 12, 15, 17, 21],
+      "blueBall": 1
+    },
+    {
+      "issue": "2026071",
+      "drawDate": "2026-06-23",
+      "redBalls": [3, 8, 19, 25, 31, 33],
+      "blueBall": 5
+    },
+    {
+      "issue": "2026070",
+      "drawDate": "2026-06-21",
+      "redBalls": [3, 6, 8, 14, 26, 27],
+      "blueBall": 8
+    }
+  ]
+}
