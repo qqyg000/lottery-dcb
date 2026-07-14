@@ -1,6 +1,7 @@
 <script setup>
 import { computed, onMounted, reactive, ref, watch } from 'vue'
 import { api } from './api'
+import { formatResultForCopy } from './result-copy'
 import { buildTrendRows } from './trend'
 
 const loading = ref(true)
@@ -12,18 +13,19 @@ const history = ref([])
 const historyStatus = ref(null)
 const statistics = ref(null)
 const result = ref(null)
-const activeView = ref('home')
+const activeView = ref('generator')
 const generatorPane = ref('base')
 const statisticsPane = ref('red')
 const expandedGroup = ref(null)
 const trendType = ref('red')
 const trendLimit = ref(30)
-const trendRangeIndex = ref(0)
 const showOmissions = ref(true)
+const copyStatus = ref('idle')
 const appBuildTime = __APP_BUILD_TIME__
+let copyStatusTimer
 
 const form = reactive({
-  ticketCount: 1,
+  ticketCount: 2,
   candidatePoolSize: 5000,
   redPoolSize: 9,
   lookback: 100,
@@ -72,27 +74,10 @@ const betModeLabels = {
 }
 
 const baseNavItems = [
-  { id: 'home', label: '首页' },
-  { id: 'generator', label: '组合生成' },
+  { id: 'generator', label: '首页' },
   { id: 'statistics', label: '历史统计' },
   { id: 'trend', label: '号码走势' },
-  { id: 'history', label: '开奖数据' },
-  { id: 'method', label: '策略说明' }
-]
-
-const strategyCards = [
-  { number: '01', title: '限制连号', text: '允许少量二连号，限制连续对数与最长连续段' },
-  { number: '02', title: '奇偶平衡', text: '默认保留 2:4、3:3、4:2 三种结构' },
-  { number: '03', title: '大小搭配', text: '1–16 为小号，17–33 为大号' },
-  { number: '04', title: '控制和值', text: '默认红球和值在 75–130 之间' },
-  { number: '05', title: '均衡三区', text: '1–11、12–22、23–33 每区默认 1–3 个' },
-  { number: '06', title: '质合搭配', text: '质数与合数同时出现，数字 1 单独处理' },
-  { number: '07', title: '规避图案', text: '过滤四项等差、交替间隔和三组对称和' },
-  { number: '08', title: '保持间隔', text: '限制号码跨度与相邻最大间隔' },
-  { number: '09', title: '控制 AC', text: '不同两两差值数减 5，默认 5–10' },
-  { number: '10', title: '分散尾数', text: '至少四种尾数，同尾默认不超过两个' },
-  { number: '11', title: '独立蓝球', text: '使用独立随机流，不参与红球指标计算' },
-  { number: '12', title: '旋转矩阵', text: '对红球池组合做均衡或二码覆盖选择' }
+  { id: 'history', label: '开奖数据' }
 ]
 
 const compoundMode = computed(() => form.betMode === 'COMPOUND_7_2')
@@ -100,9 +85,9 @@ const matrixEnabled = computed(() => !compoundMode.value && form.rotationMode !=
 const navItems = computed(() => {
   if (!result.value) return baseNavItems
   return [
-    ...baseNavItems.slice(0, 2),
+    ...baseNavItems.slice(0, 1),
     { id: 'results', label: '生成结果' },
-    ...baseNavItems.slice(2)
+    ...baseNavItems.slice(1)
   ]
 })
 const statusTone = computed(() => historyStatus.value?.lastError ? 'warning' : 'success')
@@ -116,38 +101,15 @@ const maxBlueFrequency = computed(() => {
 })
 const historyRows = computed(() => history.value)
 const trendDraws = computed(() => history.value.slice(0, trendLimit.value))
-const trendRanges = computed(() => trendType.value === 'red'
-  ? [
-      { label: '一区 01–11', start: 1, end: 11 },
-      { label: '二区 12–22', start: 12, end: 22 },
-      { label: '三区 23–33', start: 23, end: 33 }
-    ]
-  : [
-      { label: '一区 01–08', start: 1, end: 8 },
-      { label: '二区 09–16', start: 9, end: 16 }
-    ])
-const activeTrendRange = computed(() => trendRanges.value[trendRangeIndex.value] || trendRanges.value[0])
 const trendNumbers = computed(() => Array.from(
-  { length: activeTrendRange.value.end - activeTrendRange.value.start + 1 },
-  (_, index) => activeTrendRange.value.start + index
+  { length: trendType.value === 'red' ? 33 : 16 },
+  (_, index) => index + 1
 ))
 const trendRows = computed(() => buildTrendRows(
   trendDraws.value,
   trendType.value === 'red' ? 33 : 16,
   draw => trendType.value === 'red' ? draw.redBalls : [draw.blueBall]
 ))
-const visibleTrendRows = computed(() => {
-  const range = activeTrendRange.value
-  return trendRows.value
-    .map(row => ({
-      ...row,
-      cells: row.cells.slice(range.start - 1, range.end)
-    }))
-})
-
-watch(trendType, () => {
-  trendRangeIndex.value = 0
-})
 
 watch(activeView, () => {
   expandedGroup.value = null
@@ -155,7 +117,7 @@ watch(activeView, () => {
 
 watch(() => form.betMode, (mode, previousMode) => {
   if (mode === 'COMPOUND_7_2' && (previousMode === 'STANDARD' || form.ticketCount > 10)) {
-    form.ticketCount = 1
+    form.ticketCount = 2
   }
 })
 
@@ -182,7 +144,7 @@ function mergeDefaults(defaults) {
   form.strategy = { ...form.strategy, ...(defaults.strategy || {}) }
   // 后端保留旧客户端的单式默认语义；网页按当前使用习惯默认打开 7+2
   form.betMode = 'COMPOUND_7_2'
-  form.ticketCount = 1
+  form.ticketCount = 2
 }
 
 async function loadHistory() {
@@ -218,6 +180,7 @@ async function refreshHistory() {
 
 async function generate() {
   generating.value = true
+  copyStatus.value = 'idle'
   errorMessage.value = ''
   infoMessage.value = ''
   try {
@@ -248,6 +211,54 @@ async function refreshStatisticsForLookback() {
 
 function formatNumber(number) {
   return String(number).padStart(2, '0')
+}
+
+async function copyGeneratedNumbers() {
+  const text = formatResultForCopy(result.value)
+  if (!text) {
+    errorMessage.value = '暂无可复制的号码'
+    return
+  }
+
+  try {
+    await writeClipboardText(text)
+    copyStatus.value = 'copied'
+  } catch (error) {
+    copyStatus.value = 'failed'
+    errorMessage.value = '复制失败，请检查浏览器剪贴板权限'
+  }
+
+  window.clearTimeout(copyStatusTimer)
+  copyStatusTimer = window.setTimeout(() => {
+    copyStatus.value = 'idle'
+  }, 2000)
+}
+
+async function writeClipboardText(text) {
+  if (navigator.clipboard?.writeText) {
+    try {
+      await navigator.clipboard.writeText(text)
+      return
+    } catch (error) {
+      // 浏览器拒绝 Clipboard API 时继续使用兼容方案
+    }
+  }
+
+  const textarea = document.createElement('textarea')
+  textarea.value = text
+  textarea.setAttribute('readonly', '')
+  textarea.style.position = 'fixed'
+  textarea.style.left = '-9999px'
+  document.body.appendChild(textarea)
+  textarea.select()
+
+  try {
+    if (!document.execCommand('copy')) {
+      throw new Error('浏览器未执行复制命令')
+    }
+  } finally {
+    textarea.remove()
+  }
 }
 
 function formatTime(value) {
@@ -284,27 +295,28 @@ function switchView(view) {
 }
 
 function trendCellLabel(row, cell) {
+  const ballLabel = trendType.value === 'blue' ? '蓝球' : '红球'
   if (cell.hit) {
-    return `${row.issue} 第 ${cell.number} 号开出`
+    return `${row.issue} ${ballLabel}第 ${cell.number} 号开出`
   }
   if (!showOmissions.value) {
-    return `${row.issue} 第 ${cell.number} 号未开出`
+    return `${row.issue} ${ballLabel}第 ${cell.number} 号未开出`
   }
   if (cell.omission === null) {
-    return `${row.issue} 第 ${cell.number} 号在窗口起点前状态未知`
+    return `${row.issue} ${ballLabel}第 ${cell.number} 号在窗口起点前状态未知`
   }
-  return `${row.issue} 第 ${cell.number} 号遗漏 ${cell.omission} 期`
+  return `${row.issue} ${ballLabel}第 ${cell.number} 号遗漏 ${cell.omission} 期`
 }
 </script>
 
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <button class="brand brand-button" type="button" aria-label="打开首页" @click="switchView('home')">
+      <button class="brand brand-button" type="button" aria-label="打开首页" @click="switchView('generator')">
         <span class="brand-mark"><i></i><i></i></span>
         <span>
-          <strong>lottery-dcb</strong>
-          <small>DOUBLE COLOR BALL LAB</small>
+          <strong>彩票预测-双色球</strong>
+          <small>DOUBLE COLOR BALL</small>
         </span>
       </button>
       <nav class="desktop-nav" aria-label="主导航">
@@ -337,45 +349,6 @@ function trendCellLabel(row, cell) {
     </header>
 
     <main class="workspace">
-      <section v-show="activeView === 'home'" class="screen home-screen" aria-label="首页">
-      <div class="hero">
-        <div class="hero-copy">
-          <p class="eyebrow">CONSTRAINT-BASED NUMBER GENERATOR</p>
-          <h1>让每一组号码<br><span>有约束，也有解释</span></h1>
-          <p class="hero-description">
-            基于历史样本描述与 12 项组合策略，从随机候选中筛选结构均衡的红球，
-            再用独立蓝球和旋转矩阵完成多注覆盖
-          </p>
-          <div class="hero-actions">
-            <button class="primary-button" type="button" @click="switchView('generator')">开始生成组合</button>
-            <button class="text-button" type="button" @click="switchView('method')">查看策略定义 <span>↘</span></button>
-          </div>
-        </div>
-        <div class="hero-visual" aria-hidden="true">
-          <div class="orbit orbit-one"></div>
-          <div class="orbit orbit-two"></div>
-          <div class="sample-ticket">
-            <span>STRUCTURE SAMPLE</span>
-            <div class="sample-balls">
-              <i>03</i><i>08</i><i>12</i><i>18</i><i>25</i><i>32</i><i class="blue">09</i>
-            </div>
-            <div class="sample-metrics">
-              <b>Σ 98</b><b>AC 9</b><b>2:2:2</b>
-            </div>
-          </div>
-        </div>
-      </div>
-
-      <aside class="disclaimer">
-        <span class="disclaimer-icon">i</span>
-        <p>
-          <strong>概率说明</strong>
-          双色球每期开奖均为独立随机事件，每一种合法组合的理论概率相同。历史数据和筛选条件不能预测未来，也不会提高某一注的中奖概率
-        </p>
-        <span class="age-label">理性购彩 · 禁止未成年人购彩</span>
-      </aside>
-      </section>
-
       <div v-if="errorMessage" class="toast error-toast" role="alert">
         <span>!</span>{{ errorMessage }}
         <button type="button" @click="errorMessage = ''">×</button>
@@ -385,7 +358,7 @@ function trendCellLabel(row, cell) {
         <button type="button" @click="infoMessage = ''">×</button>
       </div>
 
-      <section v-show="activeView === 'generator'" class="screen section generator-section" aria-label="组合生成">
+      <section v-show="activeView === 'generator'" class="screen section generator-section" aria-label="首页">
         <div class="section-heading">
           <div>
             <p class="eyebrow">01 / GENERATOR</p>
@@ -438,7 +411,7 @@ function trendCellLabel(row, cell) {
                 <span>红球池大小</span>
                 <input v-model.number="form.redPoolSize" type="number" min="7" max="12" />
               </label>
-              <label>
+              <label :class="{ 'wide-field': !matrixEnabled }">
                 <span>历史观察期数</span>
                 <input v-model.number="form.lookback" type="number" min="10" max="1000" @change="refreshStatisticsForLookback" />
               </label>
@@ -506,6 +479,11 @@ function trendCellLabel(row, cell) {
                 <label>最少 <input v-model.number="form.strategy.minPrimeCount" type="number" min="0" max="6" /></label>
                 <label>最多 <input v-model.number="form.strategy.maxPrimeCount" type="number" min="0" max="6" /></label>
               </div>
+              <label class="switch-row">
+                <span><b>07</b> 过滤明显规律图案</span>
+                <input v-model="form.strategy.avoidRegularPatterns" type="checkbox" />
+                <i></i>
+              </label>
               <div class="constraint-row">
                 <div><b>08</b><span>间隔与跨度</span></div>
                 <label>跨度 ≥ <input v-model.number="form.strategy.minSpan" type="number" min="0" max="32" /></label>
@@ -521,11 +499,6 @@ function trendCellLabel(row, cell) {
                 <label>尾数种类 ≥ <input v-model.number="form.strategy.minDistinctTails" type="number" min="1" max="6" /></label>
                 <label>同尾 ≤ <input v-model.number="form.strategy.maxSameTailCount" type="number" min="1" max="6" /></label>
               </div>
-              <label class="switch-row">
-                <span><b>07</b> 过滤明显规律图案</span>
-                <input v-model="form.strategy.avoidRegularPatterns" type="checkbox" />
-                <i></i>
-              </label>
             </div>
           </div>
 
@@ -547,6 +520,15 @@ function trendCellLabel(row, cell) {
             <span>种子 {{ result.seed }}</span>
             <span v-if="result.betMode === 'STANDARD'">{{ rotationLabels[result.rotationMode] }}</span>
             <span>{{ blueLabels[result.blueSelectionMode] }}</span>
+            <button
+              class="copy-result-button"
+              :class="copyStatus"
+              type="button"
+              aria-live="polite"
+              @click="copyGeneratedNumbers"
+            >
+              {{ copyStatus === 'copied' ? '已复制' : copyStatus === 'failed' ? '复制失败' : '复制号码' }}
+            </button>
           </div>
         </div>
 
@@ -700,7 +682,7 @@ function trendCellLabel(row, cell) {
             <p class="eyebrow">04 / NUMBER TREND</p>
             <h2>红蓝球走势图</h2>
           </div>
-          <p>最新一期在上，命中号码以球标记，遗漏值仅在所选观察窗口内连续计算</p>
+          <p>点击红球或蓝球切换走势，实心球表示当期开奖，灰色数字表示连续遗漏期数</p>
         </div>
 
         <div class="trend-panel">
@@ -723,18 +705,6 @@ function trendCellLabel(row, cell) {
                 蓝球走势
               </button>
             </div>
-            <div class="trend-ranges" role="group" aria-label="号码区间">
-              <button
-                v-for="(range, index) in trendRanges"
-                :key="range.label"
-                type="button"
-                :aria-pressed="trendRangeIndex === index"
-                :class="{ active: trendRangeIndex === index }"
-                @click="trendRangeIndex = index"
-              >
-                {{ range.label }}
-              </button>
-            </div>
             <label class="trend-limit">
               <span>观察期数</span>
               <select v-model.number="trendLimit">
@@ -748,7 +718,7 @@ function trendCellLabel(row, cell) {
               <input v-model="showOmissions" type="checkbox" />
               <span>显示遗漏值</span>
             </label>
-            <small>{{ activeTrendRange.label }} · 当前显示 {{ trendRows.length }} 期</small>
+            <small>{{ trendType === 'red' ? '红球 01–33' : '蓝球 01–16' }} · 当前显示 {{ trendRows.length }} 期</small>
           </div>
 
           <div v-if="trendRows.length" class="trend-view">
@@ -756,14 +726,19 @@ function trendCellLabel(row, cell) {
               <thead>
                 <tr>
                   <th class="trend-issue-col" scope="col">期号</th>
-                  <th v-for="number in trendNumbers" :key="number" scope="col">
+                  <th
+                    v-for="number in trendNumbers"
+                    :key="number"
+                    :class="`trend-${trendType}-col`"
+                    scope="col"
+                  >
                     {{ formatNumber(number) }}
                   </th>
                 </tr>
               </thead>
               <tbody>
                 <tr
-                  v-for="row in visibleTrendRows"
+                  v-for="row in trendRows"
                   :key="row.issue"
                 >
                   <th class="trend-issue-col" scope="row">
@@ -774,7 +749,7 @@ function trendCellLabel(row, cell) {
                     v-for="cell in row.cells"
                     :key="cell.number"
                     class="trend-cell"
-                    :class="{ hit: cell.hit }"
+                    :class="[`trend-${trendType}-col`, { hit: cell.hit }]"
                     :aria-label="trendCellLabel(row, cell)"
                   >
                     <span v-if="cell.hit">{{ formatNumber(cell.number) }}</span>
@@ -823,28 +798,15 @@ function trendCellLabel(row, cell) {
               <tr v-for="draw in historyRows" :key="draw.issue">
                 <td>{{ draw.issue }}</td>
                 <td>{{ draw.drawDate }}</td>
-                <td><i v-for="number in draw.redBalls" :key="number">{{ formatNumber(number) }}</i></td>
+                <td>
+                  <span class="history-red-balls">
+                    <i v-for="number in draw.redBalls" :key="number">{{ formatNumber(number) }}</i>
+                  </span>
+                </td>
                 <td><i class="history-blue">{{ formatNumber(draw.blueBall) }}</i></td>
               </tr>
             </tbody>
           </table>
-        </div>
-      </section>
-
-      <section v-show="activeView === 'method'" class="screen section method-section" aria-label="策略说明">
-        <div class="section-heading">
-          <div>
-            <p class="eyebrow">06 / METHOD</p>
-            <h2>十二项策略定义</h2>
-          </div>
-          <p>硬约束负责排除不符合结构的组合，评分负责在合法候选间排序</p>
-        </div>
-        <div class="method-grid">
-          <article v-for="strategy in strategyCards" :key="strategy.number">
-            <span>{{ strategy.number }}</span>
-            <h3>{{ strategy.title }}</h3>
-            <p>{{ strategy.text }}</p>
-          </article>
         </div>
       </section>
 
