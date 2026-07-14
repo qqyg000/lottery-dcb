@@ -26,7 +26,10 @@ lottery-dcb
 - 7 红 2 蓝复式：7 个六红子集全部通过约束后，与 2 个独立蓝球完整展开为 14 注（每组 28 元）
 - 组合指标解释、号码覆盖率、二码覆盖率、红蓝球频次统计
 - 红球 1–33、蓝球 1–16 的可切换遗漏走势图，支持最近 20/30/50/100 期
-- 走势图按号码区间和每页 10 期展示，历史表在窄屏自动收起日期列，组件内不再出现横向或纵向滚动条
+- 页面固定为单个浏览器视口，通过顶部导航切换首页、生成、结果、统计、走势、开奖和策略页面
+- 不使用任何翻页按钮或分页状态，走势图、历史开奖、策略说明和生成结果完整渲染
+- 浏览器页面本身固定为单屏，内容超出时只在当前页面的内容区域内滚动
+- 生成参数和统计内容在窄屏使用页内标签切换
 - Maven 自动安装固定 Node/npm、编译前端并将产物打入可执行 jar
 
 ## 环境要求
@@ -41,14 +44,16 @@ lottery-dcb
 
 ```bash
 mvn clean package
-java -jar lottery-dcb-service/target/lottery-dcb.jar
+java -jar lottery-dcb.jar
 ```
 
 打开 `http://localhost:8080`
 
-首次 Maven 打包会下载固定版本的 Node.js 和 npm，后续使用本地 Maven 缓存。前端编译产物会自动复制到 Spring Boot 的 `classpath:/static`，无需单独部署前端
+首次 Maven 打包会下载固定版本的 Node.js 和 npm，后续使用本地 Maven 缓存。`clean` 会同时删除旧的前端 `dist` 和项目根目录旧 JAR；每次构建都会生成新的前端构建时间，在 `prepare-package` 阶段复制最新 `dist`。生成 Spring Boot 可执行包后，Maven 会解包校验其中确实包含最新前端，再覆盖项目根目录的 `lottery-dcb.jar` 并输出 SHA-256。`lottery-dcb-service/target/lottery-dcb.jar` 与根目录 JAR 内容相同
 
-Windows 控制台可使用 `run-windows.cmd` 启动，它会先切换到 UTF-8 代码页
+Windows 控制台建议使用 `run-windows.cmd` 启动，它会同时设置代码页、JVM 输出编码和日志编码为 UTF-8
+
+在 IDEA 中直接运行 `LotteryDcbApplication` 时，只要之前执行过一次 `mvn clean package`，后端会从 `lottery-dcb-web/dist` 读取前端页面。项目根目录和 `lottery-dcb-service` 模块目录两种 Working directory 都支持
 
 ## 本地开发
 
@@ -66,16 +71,20 @@ npm ci
 npm run dev
 ```
 
-此模式请访问 Vite 输出的地址，通常是 `http://localhost:5173`。`http://localhost:8080` 只提供 API，并会显示前端尚未编译的提示页。Vite 会把 `/api` 代理到 `http://localhost:8080`
+此模式请访问 Vite 输出的地址，通常是 `http://localhost:5173`。`http://localhost:8080` 只提供 API。Vite 会把 `/api` 代理到 `http://localhost:8080`
 
 如需直接访问 `http://localhost:8080` 的完整一体化页面，必须执行 `mvn clean package` 后运行生成的 jar，不要添加 `-Dskip.frontend=true`
 
 ## 访问与编码排查
 
-- 首页显示“前端尚未编译”时，说明当前启动方式没有生成 Vue 资源，请重新执行一体化打包命令
+- `mvn clean package` 完成后直接运行项目根目录的 `java -jar lottery-dcb.jar`，避免误启动之前复制到其他目录的旧包
 - 不存在的静态资源会正常返回 HTTP 404，不再被包装成服务器 500 错误
-- HTTP 响应和控制台日志固定为 UTF-8；以后启用文件日志时也会沿用 UTF-8
-- Windows 手动启动时也可先执行 `chcp 65001`，再运行 `java -Dfile.encoding=UTF-8 -jar ...`
+- 首页和静态资源返回 `Cache-Control: no-store`，重新启动新 jar 后浏览器不会继续使用旧前端
+- HTTP 响应和文件日志固定为 UTF-8；直接执行 `java -jar lottery-dcb.jar` 时，程序会在 Spring Boot 日志初始化前按 `System.console()`、`stdout.encoding`、`sun.stdout.encoding`、`native.encoding` 的顺序自动探测终端编码
+- 启动第一行会输出 `[lottery-dcb] console charset=编码名称`，用于确认本次实际采用的控制台编码
+- IDEA 启动会显示 `launch=IDEA`，并优先使用 `native.encoding` 匹配 IDEA 默认的系统控制台编码；如果 IDEA 的 Console Default Encoding 已手工改为 UTF-8，可在运行配置中设置环境变量 `CONSOLE_LOG_CHARSET=UTF-8`
+- 自动探测不符合特殊终端时，可显式设置 `CONSOLE_LOG_CHARSET`。例如 Windows UTF-8 终端先执行 `chcp 65001` 和 `set CONSOLE_LOG_CHARSET=UTF-8`；传统中文代码页可执行 `set CONSOLE_LOG_CHARSET=GBK`
+- 打包和启动前请先停止同端口上的旧进程
 
 ## 历史数据配置
 
@@ -128,4 +137,4 @@ AC = 不同两两差值个数 - (红球个数 - 1)
 - [Spring Boot 系统要求](https://docs.spring.io/spring-boot/system-requirements.html)
 - [Spring Boot Maven 可执行包](https://docs.spring.io/spring-boot/maven-plugin/packaging.html)
 - [Vue 快速上手](https://vuejs.org/guide/quick-start)
-- [Maven Resources Plugin 复制资源](https://maven.apache.org/plugins/maven-resources-plugin/examples/copy-resources.html)
+- [Maven AntRun Plugin](https://maven.apache.org/plugins/maven-antrun-plugin/)

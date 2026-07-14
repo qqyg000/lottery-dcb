@@ -42,6 +42,19 @@
 
     <build>
         <finalName>lottery-dcb</finalName>
+        <resources>
+            <resource>
+                <directory>src/main/resources</directory>
+                <excludes>
+                    <exclude>static/**</exclude>
+                </excludes>
+            </resource>
+            <resource>
+                <directory>${project.basedir}/../lottery-dcb-web/dist</directory>
+                <targetPath>static</targetPath>
+                <filtering>false</filtering>
+            </resource>
+        </resources>
         <plugins>
             <plugin>
                 <groupId>com.github.eirslett</groupId>
@@ -97,34 +110,133 @@
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.apache.maven.plugins</groupId>
-                <artifactId>maven-resources-plugin</artifactId>
+                <groupId>org.springframework.boot</groupId>
+                <artifactId>spring-boot-maven-plugin</artifactId>
+                <configuration>
+                    <mainClass>cn.lotterydcb.LotteryDcbApplication</mainClass>
+                </configuration>
                 <executions>
                     <execution>
-                        <id>copy-frontend</id>
-                        <phase>process-resources</phase>
+                        <id>repackage</id>
                         <goals>
-                            <goal>copy-resources</goal>
+                            <goal>repackage</goal>
+                        </goals>
+                    </execution>
+                </executions>
+            </plugin>
+            <plugin>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-antrun-plugin</artifactId>
+                <version>${maven-antrun-plugin.version}</version>
+                <executions>
+                    <execution>
+                        <id>replace-and-verify-frontend</id>
+                        <phase>prepare-package</phase>
+                        <goals>
+                            <goal>run</goal>
                         </goals>
                         <configuration>
-                            <outputDirectory>${project.build.outputDirectory}/static</outputDirectory>
-                            <changeDetection>always</changeDetection>
-                            <resources>
-                                <resource>
-                                    <directory>${project.basedir}/../lottery-dcb-web/dist</directory>
-                                    <filtering>false</filtering>
-                                </resource>
-                            </resources>
+                            <target>
+                                <fail message="前端未编译：缺少 lottery-dcb-web/dist/index.html，请勿跳过前端构建">
+                                    <condition>
+                                        <not>
+                                            <available file="${project.basedir}/../lottery-dcb-web/dist/index.html"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <delete dir="${project.build.outputDirectory}/static" quiet="true"/>
+                                <mkdir dir="${project.build.outputDirectory}/static"/>
+                                <copy todir="${project.build.outputDirectory}/static" overwrite="true" failonerror="true">
+                                    <fileset dir="${project.basedir}/../lottery-dcb-web/dist"/>
+                                </copy>
+                                <fail message="前端资源复制失败：JAR 暂存目录中缺少 index.html">
+                                    <condition>
+                                        <not>
+                                            <available file="${project.build.outputDirectory}/static/index.html"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <loadfile property="packaged.frontend.index" srcFile="${project.build.outputDirectory}/static/index.html"/>
+                                <fail message="前端资源仍为占位页，已终止 JAR 打包">
+                                    <condition>
+                                        <contains string="${packaged.frontend.index}" substring="前端尚未编译"/>
+                                    </condition>
+                                </fail>
+                            </target>
+                        </configuration>
+                    </execution>
+                    <execution>
+                        <id>copy-executable-jar-to-project-root</id>
+                        <phase>package</phase>
+                        <goals>
+                            <goal>run</goal>
+                        </goals>
+                        <configuration>
+                            <target>
+                                <fail message="Spring Boot 可执行 JAR 尚未生成，无法同步到项目根目录">
+                                    <condition>
+                                        <not>
+                                            <available file="${project.build.directory}/${project.build.finalName}.jar"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <delete dir="${project.build.directory}/jar-verification" quiet="true"/>
+                                <unzip src="${project.build.directory}/${project.build.finalName}.jar"
+                                       dest="${project.build.directory}/jar-verification"/>
+                                <fail message="JAR 中缺少最新前端首页，已停止复制根目录 JAR">
+                                    <condition>
+                                        <not>
+                                            <available file="${project.build.directory}/jar-verification/BOOT-INF/classes/static/index.html"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <fail message="当前产物不是 Spring Boot 可执行 JAR，已停止复制">
+                                    <condition>
+                                        <not>
+                                            <available file="${project.build.directory}/jar-verification/BOOT-INF/lib" type="dir"/>
+                                        </not>
+                                    </condition>
+                                </fail>
+                                <loadfile property="jar.frontend.index"
+                                          srcFile="${project.build.directory}/jar-verification/BOOT-INF/classes/static/index.html"/>
+                                <fail message="JAR 中仍包含前端占位页，已停止复制">
+                                    <condition>
+                                        <contains string="${jar.frontend.index}" substring="前端尚未编译"/>
+                                    </condition>
+                                </fail>
+                                <delete file="${project.basedir}/../lottery-dcb.jar" quiet="true"/>
+                                <copy file="${project.build.directory}/${project.build.finalName}.jar"
+                                      tofile="${project.basedir}/../lottery-dcb.jar"
+                                      overwrite="true"
+                                      preservelastmodified="false"
+                                      failonerror="true"/>
+                                <checksum file="${project.basedir}/../lottery-dcb.jar"
+                                          algorithm="SHA-256"
+                                          property="packaged.jar.sha256"/>
+                                <echo message="已更新项目根目录 lottery-dcb.jar，SHA-256=${packaged.jar.sha256}"/>
+                                <delete dir="${project.build.directory}/jar-verification" quiet="true"/>
+                            </target>
                         </configuration>
                     </execution>
                 </executions>
             </plugin>
             <plugin>
-                <groupId>org.springframework.boot</groupId>
-                <artifactId>spring-boot-maven-plugin</artifactId>
+                <groupId>org.apache.maven.plugins</groupId>
+                <artifactId>maven-clean-plugin</artifactId>
                 <configuration>
-                    <mainClass>cn.lotterydcb.LotteryDcbApplication</mainClass>
-                    <jvmArguments>-Dfile.encoding=UTF-8</jvmArguments>
+                    <filesets>
+                        <fileset>
+                            <directory>${project.basedir}/..</directory>
+                            <includes>
+                                <include>lottery-dcb.jar</include>
+                            </includes>
+                            <followSymlinks>false</followSymlinks>
+                        </fileset>
+                        <fileset>
+                            <directory>${project.basedir}/../lottery-dcb-web/dist</directory>
+                            <followSymlinks>false</followSymlinks>
+                        </fileset>
+                    </filesets>
                 </configuration>
             </plugin>
         </plugins>

@@ -5,6 +5,15 @@ server:
 spring:
   application:
     name: lottery-dcb
+  web:
+    resources:
+      # JAR 启动优先使用 classpath，IDEA 启动兼容项目根目录和后端模块目录两种工作路径
+      static-locations:
+        - classpath:/static/
+        - file:./lottery-dcb-web/dist/
+        - file:../lottery-dcb-web/dist/
+      cache:
+        use-last-modified: false
   servlet:
     encoding:
       charset: UTF-8
@@ -29,7 +38,7 @@ lottery:
 
 logging:
   charset:
-    console: UTF-8
+    console: ${CONSOLE_LOG_CHARSET:UTF-8}
     file: UTF-8
   level:
     root: INFO

@@ -3,6 +3,9 @@ import vue from '@vitejs/plugin-vue'
 
 export default defineConfig({
   plugins: [vue()],
+  define: {
+    __APP_BUILD_TIME__: JSON.stringify(new Date().toISOString())
+  },
   base: '/',
   build: {
     outDir: 'dist',

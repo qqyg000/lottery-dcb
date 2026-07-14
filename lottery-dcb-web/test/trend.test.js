@@ -44,19 +44,19 @@ test('empty windows and numbers never hit do not invent omissions', () => {
   assert.equal(rows[0].cells[2].omission, null)
 })
 
-test('omissions continue across a ten-row pagination boundary', () => {
-  const pagedDraws = Array.from({ length: 12 }, (_, index) => {
+test('omissions remain continuous across the full scrollable window', () => {
+  const windowDraws = Array.from({ length: 12 }, (_, index) => {
     const issueNumber = 12 - index
     return {
       issue: String(issueNumber).padStart(3, '0'),
-      redBalls: issueNumber === 2 ? [1] : [2]
+      redBalls: issueNumber === 6 ? [1] : [2]
     }
   })
 
-  const fullWindow = buildTrendRows(pagedDraws, 3, draw => draw.redBalls)
-  const newestPage = fullWindow.slice(0, 10)
+  const fullWindow = buildTrendRows(windowDraws, 3, draw => draw.redBalls)
+  const newestRows = fullWindow.slice(0, 6)
 
-  assert.equal(newestPage[9].issue, '003')
-  assert.equal(newestPage[9].cells[0].omission, 1)
-  assert.equal(newestPage[0].cells[0].omission, 10)
+  assert.equal(newestRows[5].issue, '007')
+  assert.equal(newestRows[5].cells[0].omission, 1)
+  assert.equal(newestRows[0].cells[0].omission, 6)
 })

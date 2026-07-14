@@ -1,4 +1,11 @@
 @echo off
+setlocal
 cd /d "%~dp0"
 chcp 65001 >nul
-java -Dfile.encoding=UTF-8 -jar lottery-dcb-service\target\lottery-dcb.jar
+set "CONSOLE_LOG_CHARSET=UTF-8"
+if not exist "lottery-dcb.jar" (
+  echo 请先在项目根目录执行 mvn clean package
+  exit /b 1
+)
+java -jar lottery-dcb.jar
+endlocal

@@ -12,12 +12,15 @@ const history = ref([])
 const historyStatus = ref(null)
 const statistics = ref(null)
 const result = ref(null)
+const activeView = ref('home')
+const generatorPane = ref('base')
+const statisticsPane = ref('red')
+const expandedGroup = ref(null)
 const trendType = ref('red')
 const trendLimit = ref(30)
 const trendRangeIndex = ref(0)
-const trendPage = ref(1)
-const trendPageSize = 10
 const showOmissions = ref(true)
+const appBuildTime = __APP_BUILD_TIME__
 
 const form = reactive({
   ticketCount: 1,
@@ -68,6 +71,15 @@ const betModeLabels = {
   COMPOUND_7_2: '7+2 复式'
 }
 
+const baseNavItems = [
+  { id: 'home', label: '首页' },
+  { id: 'generator', label: '组合生成' },
+  { id: 'statistics', label: '历史统计' },
+  { id: 'trend', label: '号码走势' },
+  { id: 'history', label: '开奖数据' },
+  { id: 'method', label: '策略说明' }
+]
+
 const strategyCards = [
   { number: '01', title: '限制连号', text: '允许少量二连号，限制连续对数与最长连续段' },
   { number: '02', title: '奇偶平衡', text: '默认保留 2:4、3:3、4:2 三种结构' },
@@ -85,6 +97,14 @@ const strategyCards = [
 
 const compoundMode = computed(() => form.betMode === 'COMPOUND_7_2')
 const matrixEnabled = computed(() => !compoundMode.value && form.rotationMode !== 'NONE')
+const navItems = computed(() => {
+  if (!result.value) return baseNavItems
+  return [
+    ...baseNavItems.slice(0, 2),
+    { id: 'results', label: '生成结果' },
+    ...baseNavItems.slice(2)
+  ]
+})
 const statusTone = computed(() => historyStatus.value?.lastError ? 'warning' : 'success')
 const maxRedFrequency = computed(() => {
   const rows = statistics.value?.redFrequencies || []
@@ -94,7 +114,7 @@ const maxBlueFrequency = computed(() => {
   const rows = statistics.value?.blueFrequencies || []
   return Math.max(1, ...rows.map(item => item.count))
 })
-const historyTableRows = computed(() => history.value.slice(0, 30))
+const historyRows = computed(() => history.value)
 const trendDraws = computed(() => history.value.slice(0, trendLimit.value))
 const trendRanges = computed(() => trendType.value === 'red'
   ? [
@@ -116,15 +136,9 @@ const trendRows = computed(() => buildTrendRows(
   trendType.value === 'red' ? 33 : 16,
   draw => trendType.value === 'red' ? draw.redBalls : [draw.blueBall]
 ))
-const trendPageCount = computed(() => Math.max(
-  1,
-  Math.ceil(trendRows.value.length / trendPageSize)
-))
 const visibleTrendRows = computed(() => {
-  const pageStart = (trendPage.value - 1) * trendPageSize
   const range = activeTrendRange.value
   return trendRows.value
-    .slice(pageStart, pageStart + trendPageSize)
     .map(row => ({
       ...row,
       cells: row.cells.slice(range.start - 1, range.end)
@@ -133,15 +147,10 @@ const visibleTrendRows = computed(() => {
 
 watch(trendType, () => {
   trendRangeIndex.value = 0
-  trendPage.value = 1
 })
 
-watch(trendLimit, () => {
-  trendPage.value = 1
-})
-
-watch(trendPageCount, pageCount => {
-  trendPage.value = Math.min(trendPage.value, pageCount)
+watch(activeView, () => {
+  expandedGroup.value = null
 })
 
 watch(() => form.betMode, (mode, previousMode) => {
@@ -150,7 +159,9 @@ watch(() => form.betMode, (mode, previousMode) => {
   }
 })
 
-onMounted(loadPage)
+onMounted(() => {
+  loadPage()
+})
 
 async function loadPage() {
   loading.value = true
@@ -217,10 +228,8 @@ async function generate() {
       payload.seed = Number(payload.seed)
     }
     result.value = await api.generate(payload)
+    activeView.value = 'results'
     await loadStatistics()
-    requestAnimationFrame(() => {
-      document.querySelector('#results')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
-    })
   } catch (error) {
     errorMessage.value = error.message
   } finally {
@@ -251,6 +260,16 @@ function formatTime(value) {
   }).format(new Date(value))
 }
 
+function formatBuildTime(value) {
+  return new Intl.DateTimeFormat('zh-CN', {
+    month: '2-digit',
+    day: '2-digit',
+    hour: '2-digit',
+    minute: '2-digit',
+    hour12: false
+  }).format(new Date(value))
+}
+
 function percentage(value) {
   return `${(Number(value || 0) * 100).toFixed(1)}%`
 }
@@ -259,11 +278,9 @@ function barWidth(count, max) {
   return `${Math.max(4, (count / max) * 100)}%`
 }
 
-function changeTrendPage(offset) {
-  trendPage.value = Math.min(
-    trendPageCount.value,
-    Math.max(1, trendPage.value + offset)
-  )
+function switchView(view) {
+  if (view === 'results' && !result.value) return
+  activeView.value = view
 }
 
 function trendCellLabel(row, cell) {
@@ -283,27 +300,45 @@ function trendCellLabel(row, cell) {
 <template>
   <div class="app-shell">
     <header class="topbar">
-      <a class="brand" href="#top" aria-label="返回顶部">
+      <button class="brand brand-button" type="button" aria-label="打开首页" @click="switchView('home')">
         <span class="brand-mark"><i></i><i></i></span>
         <span>
           <strong>lottery-dcb</strong>
           <small>DOUBLE COLOR BALL LAB</small>
         </span>
-      </a>
-      <nav>
-        <a href="#generator">组合生成</a>
-        <a href="#statistics">历史统计</a>
-        <a href="#trend">号码走势</a>
-        <a href="#history">开奖数据</a>
+      </button>
+      <nav class="desktop-nav" aria-label="主导航">
+        <button
+          v-for="item in navItems"
+          :key="item.id"
+          type="button"
+          :class="{ active: activeView === item.id }"
+          :aria-current="activeView === item.id ? 'page' : undefined"
+          @click="switchView(item.id)"
+        >
+          {{ item.label }}
+        </button>
       </nav>
-      <div v-if="historyStatus" class="data-state" :class="statusTone">
+      <label class="mobile-nav">
+        <span>功能页面</span>
+        <select :value="activeView" @change="switchView($event.target.value)">
+          <option v-for="item in navItems" :key="item.id" :value="item.id">{{ item.label }}</option>
+        </select>
+      </label>
+      <div
+        v-if="historyStatus"
+        class="data-state"
+        :class="statusTone"
+        :title="`前端构建时间：${formatBuildTime(appBuildTime)}`"
+      >
         <span class="state-dot"></span>
-        {{ historyStatus.recordCount }} 期数据
+        {{ historyStatus.recordCount }} 期 · 构建 {{ formatBuildTime(appBuildTime) }}
       </div>
     </header>
 
-    <main id="top">
-      <section class="hero">
+    <main class="workspace">
+      <section v-show="activeView === 'home'" class="screen home-screen" aria-label="首页">
+      <div class="hero">
         <div class="hero-copy">
           <p class="eyebrow">CONSTRAINT-BASED NUMBER GENERATOR</p>
           <h1>让每一组号码<br><span>有约束，也有解释</span></h1>
@@ -312,8 +347,8 @@ function trendCellLabel(row, cell) {
             再用独立蓝球和旋转矩阵完成多注覆盖
           </p>
           <div class="hero-actions">
-            <a class="primary-button" href="#generator">开始生成组合</a>
-            <a class="text-button" href="#method">查看策略定义 <span>↘</span></a>
+            <button class="primary-button" type="button" @click="switchView('generator')">开始生成组合</button>
+            <button class="text-button" type="button" @click="switchView('method')">查看策略定义 <span>↘</span></button>
           </div>
         </div>
         <div class="hero-visual" aria-hidden="true">
@@ -329,7 +364,7 @@ function trendCellLabel(row, cell) {
             </div>
           </div>
         </div>
-      </section>
+      </div>
 
       <aside class="disclaimer">
         <span class="disclaimer-icon">i</span>
@@ -339,6 +374,7 @@ function trendCellLabel(row, cell) {
         </p>
         <span class="age-label">理性购彩 · 禁止未成年人购彩</span>
       </aside>
+      </section>
 
       <div v-if="errorMessage" class="toast error-toast" role="alert">
         <span>!</span>{{ errorMessage }}
@@ -349,7 +385,7 @@ function trendCellLabel(row, cell) {
         <button type="button" @click="infoMessage = ''">×</button>
       </div>
 
-      <section id="generator" class="section generator-section">
+      <section v-show="activeView === 'generator'" class="screen section generator-section" aria-label="组合生成">
         <div class="section-heading">
           <div>
             <p class="eyebrow">01 / GENERATOR</p>
@@ -358,8 +394,13 @@ function trendCellLabel(row, cell) {
           <p>所有范围均可调整。条件过窄时，后端会返回冲突原因，不会静默放宽约束</p>
         </div>
 
+        <div class="workspace-tabs generator-tabs" role="tablist" aria-label="生成参数分组">
+          <button type="button" :class="{ active: generatorPane === 'base' }" @click="generatorPane = 'base'">基础参数</button>
+          <button type="button" :class="{ active: generatorPane === 'strategy' }" @click="generatorPane = 'strategy'">红球约束</button>
+        </div>
+
         <form class="generator-grid" @submit.prevent="generate">
-          <div class="panel base-panel">
+          <div class="panel base-panel" :class="{ 'pane-hidden': generatorPane !== 'base' }">
             <div class="panel-title">
               <span>基础参数</span>
               <small>OUTPUT & MATRIX</small>
@@ -429,7 +470,7 @@ function trendCellLabel(row, cell) {
             </div>
           </div>
 
-          <div class="panel strategy-panel">
+          <div class="panel strategy-panel" :class="{ 'pane-hidden': generatorPane !== 'strategy' }">
             <div class="panel-title">
               <span>红球硬约束</span>
               <small>10 RED-BALL FILTERS</small>
@@ -495,7 +536,7 @@ function trendCellLabel(row, cell) {
         </form>
       </section>
 
-      <section v-if="result" id="results" class="section results-section">
+      <section v-if="result" v-show="activeView === 'results'" class="screen section results-section" aria-label="生成结果">
         <div class="section-heading result-heading">
           <div>
             <p class="eyebrow">02 / GENERATED SET</p>
@@ -583,28 +624,15 @@ function trendCellLabel(row, cell) {
               <span v-for="highlight in group.highlights" :key="highlight">{{ highlight }}</span>
             </div>
 
-            <details class="expanded-tickets">
-              <summary>查看本组展开的 {{ group.expandedTicketCount }} 注单式</summary>
-              <div class="expanded-ticket-grid">
-                <div
-                  v-for="ticket in group.expandedTickets"
-                  :key="ticket.sequence"
-                  class="expanded-ticket"
-                >
-                  <small>NO. {{ String(ticket.sequence).padStart(2, '0') }}</small>
-                  <div>
-                    <i v-for="number in ticket.redBalls" :key="number">{{ formatNumber(number) }}</i>
-                    <b>{{ formatNumber(ticket.blueBall) }}</b>
-                  </div>
-                </div>
-              </div>
-            </details>
+            <button class="expanded-button" type="button" @click="expandedGroup = group">
+              查看本组展开的 {{ group.expandedTicketCount }} 注单式
+            </button>
           </article>
         </div>
         <p class="result-notice">{{ result.notice }}</p>
       </section>
 
-      <section id="statistics" class="section statistics-section">
+      <section v-show="activeView === 'statistics'" class="screen section statistics-section" aria-label="历史统计">
         <div class="section-heading">
           <div>
             <p class="eyebrow">03 / HISTORY PROFILE</p>
@@ -613,8 +641,13 @@ function trendCellLabel(row, cell) {
           <p v-if="statistics">最近 {{ statistics.lookback }} 期 · {{ statistics.notice }}</p>
         </div>
 
+        <div class="workspace-tabs statistics-tabs" role="tablist" aria-label="统计分组">
+          <button type="button" :class="{ active: statisticsPane === 'red' }" @click="statisticsPane = 'red'">红球频次</button>
+          <button type="button" :class="{ active: statisticsPane === 'summary' }" @click="statisticsPane = 'summary'">蓝球与样本</button>
+        </div>
+
         <div v-if="statistics" class="statistics-grid">
-          <div class="panel frequency-panel">
+          <div class="panel frequency-panel" :class="{ 'pane-hidden': statisticsPane !== 'red' }">
             <div class="panel-title">
               <span>红球出现次数</span>
               <small>1—33</small>
@@ -627,7 +660,7 @@ function trendCellLabel(row, cell) {
               </div>
             </div>
           </div>
-          <div class="side-statistics">
+          <div class="side-statistics" :class="{ 'pane-hidden': statisticsPane !== 'summary' }">
             <div class="panel compact-panel">
               <div class="panel-title">
                 <span>样本两端</span>
@@ -661,7 +694,7 @@ function trendCellLabel(row, cell) {
         </div>
       </section>
 
-      <section id="trend" class="section trend-section">
+      <section v-show="activeView === 'trend'" class="screen section trend-section" aria-label="号码走势">
         <div class="section-heading">
           <div>
             <p class="eyebrow">04 / NUMBER TREND</p>
@@ -697,7 +730,7 @@ function trendCellLabel(row, cell) {
                 type="button"
                 :aria-pressed="trendRangeIndex === index"
                 :class="{ active: trendRangeIndex === index }"
-                @click="trendRangeIndex = index; trendPage = 1"
+                @click="trendRangeIndex = index"
               >
                 {{ range.label }}
               </button>
@@ -715,7 +748,7 @@ function trendCellLabel(row, cell) {
               <input v-model="showOmissions" type="checkbox" />
               <span>显示遗漏值</span>
             </label>
-            <small>{{ activeTrendRange.label }} · 已载入 {{ trendRows.length }} 期</small>
+            <small>{{ activeTrendRange.label }} · 当前显示 {{ trendRows.length }} 期</small>
           </div>
 
           <div v-if="trendRows.length" class="trend-view">
@@ -751,17 +784,12 @@ function trendCellLabel(row, cell) {
                 </tr>
               </tbody>
             </table>
-            <nav class="trend-pagination" aria-label="走势期数分页">
-              <button type="button" :disabled="trendPage === 1" @click="changeTrendPage(-1)">较新</button>
-              <span>第 {{ trendPage }} / {{ trendPageCount }} 页</span>
-              <button type="button" :disabled="trendPage === trendPageCount" @click="changeTrendPage(1)">更早</button>
-            </nav>
           </div>
           <p v-else class="trend-empty">暂无可用于绘制走势的历史数据</p>
         </div>
       </section>
 
-      <section id="history" class="section history-section">
+      <section v-show="activeView === 'history'" class="screen section history-section" aria-label="开奖数据">
         <div class="section-heading">
           <div>
             <p class="eyebrow">05 / DATA ARCHIVE</p>
@@ -792,7 +820,7 @@ function trendCellLabel(row, cell) {
               <tr><th>期号</th><th>开奖日期</th><th>红球</th><th>蓝球</th></tr>
             </thead>
             <tbody>
-              <tr v-for="draw in historyTableRows" :key="draw.issue">
+              <tr v-for="draw in historyRows" :key="draw.issue">
                 <td>{{ draw.issue }}</td>
                 <td>{{ draw.drawDate }}</td>
                 <td><i v-for="number in draw.redBalls" :key="number">{{ formatNumber(number) }}</i></td>
@@ -803,7 +831,7 @@ function trendCellLabel(row, cell) {
         </div>
       </section>
 
-      <section id="method" class="section method-section">
+      <section v-show="activeView === 'method'" class="screen section method-section" aria-label="策略说明">
         <div class="section-heading">
           <div>
             <p class="eyebrow">06 / METHOD</p>
@@ -819,15 +847,31 @@ function trendCellLabel(row, cell) {
           </article>
         </div>
       </section>
-    </main>
 
-    <footer>
-      <div class="brand footer-brand">
-        <span class="brand-mark"><i></i><i></i></span>
-        <span><strong>lottery-dcb</strong><small>FOR LEARNING & ENTERTAINMENT</small></span>
+      <div v-if="expandedGroup" class="expanded-modal" role="dialog" aria-modal="true" aria-label="7+2 展开单式">
+        <div class="expanded-modal-panel">
+          <header>
+            <div>
+              <strong>第 {{ expandedGroup.sequence }} 组 · 14 注展开</strong>
+              <small>7 个六红子集 × 2 个蓝球</small>
+            </div>
+            <button type="button" aria-label="关闭展开明细" @click="expandedGroup = null">×</button>
+          </header>
+          <div class="expanded-ticket-grid">
+            <div
+              v-for="ticket in expandedGroup.expandedTickets"
+              :key="ticket.sequence"
+              class="expanded-ticket"
+            >
+              <small>NO. {{ String(ticket.sequence).padStart(2, '0') }}</small>
+              <div>
+                <i v-for="number in ticket.redBalls" :key="number">{{ formatNumber(number) }}</i>
+                <b>{{ formatNumber(ticket.blueBall) }}</b>
+              </div>
+            </div>
+          </div>
+        </div>
       </div>
-      <p>历史不会预告未来。保持清醒，量力而行</p>
-      <span>Spring Boot · Vue · Maven</span>
-    </footer>
+    </main>
   </div>
 </template>
