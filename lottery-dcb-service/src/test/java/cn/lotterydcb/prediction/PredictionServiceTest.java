@@ -25,6 +25,8 @@ class PredictionServiceTest {
 
         assertEquals(BetMode.STANDARD, request.getBetMode());
         assertEquals(8, request.getTicketCount());
+        assertEquals(7, request.getCompoundRedCount());
+        assertEquals(2, request.getCompoundBlueCount());
     }
 
     @Test
@@ -78,13 +80,15 @@ class PredictionServiceTest {
         request.setSeed(20260713L);
         request.setTicketCount(1);
         request.setCandidatePoolSize(1000);
-        request.setBetMode(BetMode.COMPOUND_7_2);
+        request.setBetMode(BetMode.COMPOUND);
 
         PredictionResponse first = service.generate(request);
         PredictionResponse second = service.generate(request);
 
         assertEquals(first.compoundGroups(), second.compoundGroups());
-        assertEquals(BetMode.COMPOUND_7_2, first.betMode());
+        assertEquals(BetMode.COMPOUND, first.betMode());
+        assertEquals(7, first.compoundRedCount());
+        assertEquals(2, first.compoundBlueCount());
         assertEquals(1, first.compoundGroups().size());
         assertEquals(14, first.tickets().size());
         assertEquals(14, first.expandedTicketCount());
@@ -139,7 +143,7 @@ class PredictionServiceTest {
         request.setSeed(88L);
         request.setTicketCount(2);
         request.setCandidatePoolSize(1000);
-        request.setBetMode(BetMode.COMPOUND_7_2);
+        request.setBetMode(BetMode.COMPOUND);
 
         PredictionResponse response = service.generate(request);
 
@@ -165,7 +169,7 @@ class PredictionServiceTest {
         request.setSeed(99L);
         request.setTicketCount(1);
         request.setCandidatePoolSize(1000);
-        request.setBetMode(BetMode.COMPOUND_7_2);
+        request.setBetMode(BetMode.COMPOUND);
 
         request.setBlueSelectionMode(BlueSelectionMode.RANDOM);
         PredictionResponse randomBlue = service.generate(request);
@@ -179,10 +183,55 @@ class PredictionServiceTest {
     }
 
     @Test
+    void customEightPlusThreeCompoundShouldExpandToEightyFourTickets() {
+        PredictionService service = createService();
+        PredictionRequest request = new PredictionRequest();
+        request.setSeed(20260722L);
+        request.setTicketCount(1);
+        request.setCandidatePoolSize(100);
+        request.setBetMode(BetMode.COMPOUND);
+        request.setCompoundRedCount(8);
+        request.setCompoundBlueCount(3);
+        relaxStrategy(request.getStrategy());
+
+        PredictionResponse response = service.generate(request);
+
+        assertEquals(8, response.compoundRedCount());
+        assertEquals(3, response.compoundBlueCount());
+        assertEquals(84, response.expandedTicketCount());
+        assertEquals(168, response.totalStakeAmountYuan());
+        assertEquals(84, response.tickets().size());
+        CompoundPredictionGroup group = response.compoundGroups().get(0);
+        assertEquals(8, group.redBalls().size());
+        assertEquals(3, group.blueBalls().size());
+        assertEquals(84, group.expandedTickets().size());
+        assertEquals(28, group.expandedTickets().stream().map(PredictionTicket::redBalls).distinct().count());
+        assertEquals(84, group.expandedTickets().stream()
+                .map(ticket -> ticket.redBalls() + ":" + ticket.blueBall())
+                .distinct()
+                .count());
+    }
+
+    @Test
+    void legacySevenPlusTwoModeShouldRemainSupported() {
+        PredictionService service = createService();
+        PredictionRequest request = new PredictionRequest();
+        request.setSeed(72L);
+        request.setTicketCount(1);
+        request.setCandidatePoolSize(100);
+        request.setBetMode(BetMode.COMPOUND_7_2);
+
+        PredictionResponse response = service.generate(request);
+
+        assertEquals(BetMode.COMPOUND_7_2, response.betMode());
+        assertEquals(14, response.expandedTicketCount());
+    }
+
+    @Test
     void compoundModeShouldRejectTooManyGroups() {
         PredictionService service = createService();
         PredictionRequest request = new PredictionRequest();
-        request.setBetMode(BetMode.COMPOUND_7_2);
+        request.setBetMode(BetMode.COMPOUND);
         request.setTicketCount(11);
 
         IllegalArgumentException exception = assertThrows(
@@ -191,6 +240,62 @@ class PredictionServiceTest {
         );
 
         assertTrue(exception.getMessage().contains("最多生成 10 组"));
+    }
+
+    @Test
+    void compoundModeShouldRejectSingleSixPlusOneConfiguration() {
+        PredictionService service = createService();
+        PredictionRequest request = new PredictionRequest();
+        request.setBetMode(BetMode.COMPOUND);
+        request.setCompoundRedCount(6);
+        request.setCompoundBlueCount(1);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.generate(request)
+        );
+
+        assertTrue(exception.getMessage().contains("6+1 是单式"));
+    }
+
+    @Test
+    void compoundModeShouldRejectMoreThanTenThousandExpandedTickets() {
+        PredictionService service = createService();
+        PredictionRequest request = new PredictionRequest();
+        request.setBetMode(BetMode.COMPOUND);
+        request.setTicketCount(3);
+        request.setCompoundRedCount(13);
+        request.setCompoundBlueCount(2);
+
+        IllegalArgumentException exception = assertThrows(
+                IllegalArgumentException.class,
+                () -> service.generate(request)
+        );
+
+        assertTrue(exception.getMessage().contains("10296 注"));
+        assertTrue(exception.getMessage().contains("最多允许 10000 注"));
+    }
+
+    private void relaxStrategy(StrategyParameters strategy) {
+        strategy.setMaxConsecutivePairs(5);
+        strategy.setMaxConsecutiveRun(6);
+        strategy.setMinOddCount(0);
+        strategy.setMaxOddCount(6);
+        strategy.setMinSmallCount(0);
+        strategy.setMaxSmallCount(6);
+        strategy.setMinSum(21);
+        strategy.setMaxSum(183);
+        strategy.setMinZoneCount(0);
+        strategy.setMaxZoneCount(6);
+        strategy.setMinPrimeCount(0);
+        strategy.setMaxPrimeCount(6);
+        strategy.setMinSpan(0);
+        strategy.setMaxGap(32);
+        strategy.setMinAcValue(0);
+        strategy.setMaxAcValue(10);
+        strategy.setMinDistinctTails(1);
+        strategy.setMaxSameTailCount(6);
+        strategy.setAvoidRegularPatterns(false);
     }
 
     private PredictionService createService() {

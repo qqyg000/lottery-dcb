@@ -29,6 +29,14 @@ public class PredictionRequest {
     @NotNull
     private BetMode betMode = BetMode.STANDARD;
 
+    @Min(6)
+    @Max(33)
+    private int compoundRedCount = 7;
+
+    @Min(1)
+    @Max(16)
+    private int compoundBlueCount = 2;
+
     @NotNull
     private BlueSelectionMode blueSelectionMode = BlueSelectionMode.FREQUENCY_BALANCED;
 
@@ -86,6 +94,22 @@ public class PredictionRequest {
 
     public void setBetMode(BetMode betMode) {
         this.betMode = betMode;
+    }
+
+    public int getCompoundRedCount() {
+        return compoundRedCount;
+    }
+
+    public void setCompoundRedCount(int compoundRedCount) {
+        this.compoundRedCount = compoundRedCount;
+    }
+
+    public int getCompoundBlueCount() {
+        return compoundBlueCount;
+    }
+
+    public void setCompoundBlueCount(int compoundBlueCount) {
+        this.compoundBlueCount = compoundBlueCount;
     }
 
     public BlueSelectionMode getBlueSelectionMode() {

@@ -556,26 +556,75 @@ footer {
   text-align: center;
 }
 
-.compound-spec span {
+.compound-spec > label {
+  align-items: stretch;
+  gap: 6px;
+}
+
+.compound-spec > label > span {
   display: block;
+  color: #666c79;
+  text-align: left;
 }
 
-.compound-spec b {
+.compound-spec > label > input {
+  border-color: #cbc6bc;
+  font-size: 15px;
+  font-weight: 700;
+  text-align: center;
+}
+
+.compound-spec > label:first-child > input {
   color: var(--red-dark);
-  font: 700 15px var(--mono);
 }
 
-.compound-spec i {
+.compound-spec > label:last-of-type > input {
+  color: var(--blue);
+}
+
+.compound-spec > label > em {
+  text-align: left;
+}
+
+.compound-spec > i {
   color: #9a9da5;
   font-style: normal;
+  font-size: 18px;
 }
 
-.compound-spec strong {
+.compound-spec-summary {
+  position: relative;
   grid-column: 1 / -1;
-  padding-top: 10px;
-  border-top: 1px solid #d9d5ce;
+  height: 81px;
+  box-shadow: inset 0 1px #d9d5ce;
+}
+
+.compound-spec-summary > strong,
+.compound-spec-summary > small {
+  position: absolute;
+  right: 0;
+  left: 0;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transform: translateY(-50%);
+}
+
+.compound-spec-summary > strong {
+  top: 40%;
   color: var(--ink);
   font: 600 12px var(--mono);
+}
+
+.compound-spec-summary > small {
+  top: 80%;
+  color: #858994;
+  font-size: 10px;
+}
+
+.compound-spec-summary > small.warning {
+  color: var(--red-dark);
+  font-weight: 700;
 }
 
 input,
@@ -591,9 +640,21 @@ select {
   font-size: 12px;
 }
 
-.field-grid input,
-.field-grid select {
+select {
+  padding-right: 36px;
+  appearance: none;
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='10' height='6' viewBox='0 0 10 6'%3E%3Cpath d='M1 1l4 4 4-4' fill='none' stroke='%23172034' stroke-width='1.5'/%3E%3C/svg%3E");
+  background-repeat: no-repeat;
+  background-position: right 16px center;
+  background-size: 10px 6px;
+}
+
+.field-grid input {
   padding: 0 12px;
+}
+
+.field-grid select {
+  padding: 0 38px 0 12px;
 }
 
 input:focus,
@@ -997,14 +1058,6 @@ select:focus {
   gap: 9px;
 }
 
-.compound-red {
-  grid-template-columns: repeat(7, minmax(0, 1fr));
-}
-
-.compound-blue {
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-}
-
 .compound-balls i {
   display: inline-flex;
   width: min(44px, 100%);
@@ -1023,6 +1076,11 @@ select:focus {
   border-color: var(--blue);
   background: var(--blue);
   color: #fff;
+}
+
+.compound-red,
+.compound-blue {
+  grid-template-columns: repeat(auto-fit, minmax(34px, 1fr));
 }
 
 .compound-summary {
@@ -1283,7 +1341,8 @@ select:focus {
 .trend-limit select {
   width: 86px;
   height: 38px;
-  padding: 0 9px;
+  padding: 0 30px 0 9px;
+  background-position: right 10px center;
 }
 
 .trend-check {
@@ -1682,10 +1741,6 @@ footer > span {
     gap: 20px;
   }
 
-  .compound-red {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-
   .compound-summary {
     grid-template-columns: auto auto 1fr;
     gap: 14px;
@@ -1829,15 +1884,6 @@ footer > span {
 
   .compound-header b {
     justify-self: start;
-  }
-
-  .compound-red {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
-  .compound-blue {
-    grid-template-columns: repeat(2, minmax(0, 54px));
-    justify-content: start;
   }
 
   .compound-summary {
@@ -2117,6 +2163,12 @@ body,
   padding: clamp(12px, 1.9vh, 22px) clamp(14px, 1.3vw, 22px);
 }
 
+.compound-field-grid {
+  grid-template-rows: minmax(54px, 1fr) minmax(171px, 2fr) repeat(3, minmax(54px, 1fr));
+  row-gap: 7px;
+  padding-block: 10px;
+}
+
 .field-grid label {
   justify-content: center;
   gap: clamp(5px, 0.7vh, 9px);
@@ -2137,8 +2189,7 @@ select {
   font-size: clamp(11px, 0.72vw, 13px);
 }
 
-.compound-spec strong {
-  padding-top: clamp(7px, 0.9vh, 11px);
+.compound-spec-summary > strong {
   font-size: clamp(12px, 0.8vw, 14px);
 }
 
@@ -2188,14 +2239,6 @@ select {
 .generate-button {
   min-height: 100%;
   font-size: clamp(14px, 0.9vw, 17px);
-}
-
-.results-section .section-heading {
-  margin-bottom: 6px;
-}
-
-.results-section {
-  padding-block: clamp(10px, 1.4vh, 14px);
 }
 
 .coverage-strip {
@@ -2572,19 +2615,19 @@ select {
 }
 
 .history-table i {
-  width: 32px;
-  height: 32px;
+  width: 30px;
+  height: 30px;
   margin-right: 0;
   background: var(--red);
   color: #fff;
-  font: 600 12px/1 var(--mono);
+  font: 600 11px/1 var(--mono);
   box-shadow: 0 2px 5px rgba(185, 31, 45, 0.18);
 }
 
 .history-red-balls {
   display: inline-flex;
   align-items: center;
-  gap: 10px;
+  gap: 8px;
 }
 
 .history-table .history-blue {
@@ -2713,7 +2756,8 @@ select {
 
   .mobile-nav select {
     height: 34px;
-    padding-inline: 8px;
+    padding: 0 30px 0 8px;
+    background-position: right 10px center;
   }
 
   .workspace {
@@ -2915,10 +2959,6 @@ select {
     gap: 10px;
   }
 
-  .compound-red {
-    grid-template-columns: repeat(7, minmax(0, 1fr));
-  }
-
   .compound-summary {
     grid-template-columns: auto auto 1fr;
   }
@@ -3017,10 +3057,10 @@ select {
   }
 
   .history-table i {
-    width: 32px;
-    height: 32px;
+    width: 28px;
+    height: 28px;
     margin-right: 0;
-    font: 600 12px/1 var(--mono);
+    font: 600 10px/1 var(--mono);
   }
 
   .method-grid article {

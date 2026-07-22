@@ -164,7 +164,7 @@ AC = 不同两两差值个数 - (红球个数 - 1)
   </tr>
   <tr>
     <td><img src="./docs/images/sponsor-alipay.png" alt="支付宝收款码" width="260"></td>
-    <td><img src="./docs/images/sponsor-wechat.png" alt="微信收款码" width="260"></td>
+    <td><img src="docs/images/wechat-pay-qr.png" alt="微信收款码" width="260"></td>
   </tr>
 </table>
 

@@ -5,7 +5,7 @@ function formatBalls(numbers) {
 export function formatResultForCopy(result) {
   if (!result) return ''
 
-  const compoundMode = result.betMode === 'COMPOUND_7_2'
+  const compoundMode = result.betMode === 'COMPOUND' || result.betMode === 'COMPOUND_7_2'
   const rows = compoundMode ? result.compoundGroups : result.tickets
 
   return (rows || []).map(row => {

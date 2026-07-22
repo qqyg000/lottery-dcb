@@ -29,7 +29,9 @@ const form = reactive({
   candidatePoolSize: 5000,
   redPoolSize: 9,
   lookback: 100,
-  betMode: 'COMPOUND_7_2',
+  betMode: 'COMPOUND',
+  compoundRedCount: 7,
+  compoundBlueCount: 2,
   rotationMode: 'PAIR_COVERAGE',
   blueSelectionMode: 'FREQUENCY_BALANCED',
   seed: null,
@@ -70,6 +72,7 @@ const blueLabels = {
 
 const betModeLabels = {
   STANDARD: '单式 / 旋转矩阵',
+  COMPOUND: '复式',
   COMPOUND_7_2: '7+2 复式'
 }
 
@@ -80,8 +83,19 @@ const baseNavItems = [
   { id: 'history', label: '开奖数据' }
 ]
 
-const compoundMode = computed(() => form.betMode === 'COMPOUND_7_2')
+const compoundMode = computed(() => isCompoundMode(form.betMode))
 const matrixEnabled = computed(() => !compoundMode.value && form.rotationMode !== 'NONE')
+const compoundRedCombinationCount = computed(() => combinations(form.compoundRedCount, 6))
+const compoundExpandedPerGroup = computed(() => (
+  compoundRedCombinationCount.value * Number(form.compoundBlueCount || 0)
+))
+const compoundTotalExpanded = computed(() => (
+  compoundExpandedPerGroup.value * Number(form.ticketCount || 0)
+))
+const compoundConfigurationInvalid = computed(() => (
+  Number(form.compoundRedCount) === 6 && Number(form.compoundBlueCount) === 1
+))
+const compoundLimitExceeded = computed(() => compoundTotalExpanded.value > 10000)
 const navItems = computed(() => {
   if (!result.value) return baseNavItems
   return [
@@ -116,8 +130,11 @@ watch(activeView, () => {
 })
 
 watch(() => form.betMode, (mode, previousMode) => {
-  if (mode === 'COMPOUND_7_2' && (previousMode === 'STANDARD' || form.ticketCount > 10)) {
-    form.ticketCount = 2
+  if (isCompoundMode(mode)) {
+    form.seed = null
+    if (previousMode === 'STANDARD' || form.ticketCount > 10) {
+      form.ticketCount = 2
+    }
   }
 })
 
@@ -143,8 +160,10 @@ function mergeDefaults(defaults) {
   Object.assign(form, defaults)
   form.strategy = { ...form.strategy, ...(defaults.strategy || {}) }
   // 后端保留旧客户端的单式默认语义；网页按当前使用习惯默认打开 7+2
-  form.betMode = 'COMPOUND_7_2'
+  form.betMode = 'COMPOUND'
   form.ticketCount = 2
+  form.compoundRedCount = 7
+  form.compoundBlueCount = 2
 }
 
 async function loadHistory() {
@@ -185,6 +204,7 @@ async function generate() {
   infoMessage.value = ''
   try {
     const payload = JSON.parse(JSON.stringify(form))
+    validateCompoundForm(payload)
     if (payload.seed === '' || payload.seed === null) {
       payload.seed = null
     } else {
@@ -198,6 +218,41 @@ async function generate() {
   } finally {
     generating.value = false
   }
+}
+
+function validateCompoundForm(payload) {
+  if (!isCompoundMode(payload.betMode)) return
+  if (payload.compoundRedCount === 6 && payload.compoundBlueCount === 1) {
+    throw new Error('6+1 是单式，复式红球至少 7 个或蓝球至少 2 个')
+  }
+  const expandedTicketCount = combinations(payload.compoundRedCount, 6)
+    * payload.compoundBlueCount
+    * payload.ticketCount
+  if (expandedTicketCount > 10000) {
+    throw new Error(`当前配置将展开 ${expandedTicketCount} 注，最多允许 10000 注`)
+  }
+}
+
+function isCompoundMode(mode) {
+  return mode === 'COMPOUND' || mode === 'COMPOUND_7_2'
+}
+
+function combinations(total, choose) {
+  const safeTotal = Number(total)
+  if (!Number.isInteger(safeTotal) || choose < 0 || choose > safeTotal) return 0
+  let value = 1
+  for (let index = 1; index <= choose; index += 1) {
+    value = value * (safeTotal - choose + index) / index
+  }
+  return Math.round(value)
+}
+
+function resultBetModeLabel(response) {
+  if (!isCompoundMode(response?.betMode)) return betModeLabels[response?.betMode] || response?.betMode
+  const firstGroup = response.compoundGroups?.[0]
+  const redCount = response.compoundRedCount ?? firstGroup?.redBalls?.length ?? 7
+  const blueCount = response.compoundBlueCount ?? firstGroup?.blueBalls?.length ?? 2
+  return `${redCount}+${blueCount} 复式`
 }
 
 async function refreshStatisticsForLookback() {
@@ -378,14 +433,36 @@ function trendCellLabel(row, cell) {
               <span>基础参数</span>
               <small>OUTPUT & MATRIX</small>
             </div>
-            <div class="field-grid">
+            <div class="field-grid" :class="{ 'compound-field-grid': compoundMode }">
               <label class="wide-field">
                 <span>投注方式</span>
                 <select v-model="form.betMode">
-                  <option value="COMPOUND_7_2">7+2 复式</option>
-                  <option value="STANDARD">单式 / 旋转矩阵</option>
+                  <option value="COMPOUND">复式</option>
+                  <option value="STANDARD">单式</option>
                 </select>
               </label>
+              <div v-if="compoundMode" class="compound-spec wide-field">
+                <label>
+                  <span>红球数量</span>
+                  <input v-model.number="form.compoundRedCount" type="number" min="6" max="33" />
+                </label>
+                <i>+</i>
+                <label>
+                  <span>蓝球数量</span>
+                  <input v-model.number="form.compoundBlueCount" type="number" min="1" max="16" />
+                </label>
+                <div class="compound-spec-summary">
+                  <strong>
+                    每组 C({{ form.compoundRedCount }},6) × C({{ form.compoundBlueCount }},1)
+                    = {{ compoundExpandedPerGroup }} 注 · {{ compoundExpandedPerGroup * 2 }} 元
+                  </strong>
+                  <small :class="{ warning: compoundConfigurationInvalid || compoundLimitExceeded }">
+                    共 {{ compoundTotalExpanded }} 注
+                    <template v-if="compoundConfigurationInvalid"> · 6+1 属于单式</template>
+                    <template v-else-if="compoundLimitExceeded"> · 超过 10000 注上限</template>
+                  </small>
+                </div>
+              </div>
               <label>
                 <span>{{ compoundMode ? '复式组数' : '生成注数' }}</span>
                 <input
@@ -423,7 +500,7 @@ function trendCellLabel(row, cell) {
                   <option value="COLD_HOT_MIX">冷热交替</option>
                 </select>
               </label>
-              <label class="wide-field">
+              <label v-if="!compoundMode" class="wide-field">
                 <span>复现种子 <em>可选</em></span>
                 <input
                   v-model="form.seed"
@@ -434,12 +511,6 @@ function trendCellLabel(row, cell) {
                   placeholder="留空则随机生成"
                 />
               </label>
-              <div v-if="compoundMode" class="compound-spec wide-field">
-                <span><b>7 红</b>任选 6 个</span>
-                <i>×</i>
-                <span><b>2 蓝</b>任选 1 个</span>
-                <strong>每组 14 注 · 28 元</strong>
-              </div>
             </div>
           </div>
 
@@ -516,7 +587,7 @@ function trendCellLabel(row, cell) {
             <h2>本次组合结果</h2>
           </div>
           <div class="result-meta">
-            <span>{{ betModeLabels[result.betMode] }}</span>
+            <span>{{ resultBetModeLabel(result) }}</span>
             <span>种子 {{ result.seed }}</span>
             <span v-if="result.betMode === 'STANDARD'">{{ rotationLabels[result.rotationMode] }}</span>
             <span>{{ blueLabels[result.blueSelectionMode] }}</span>
@@ -542,9 +613,9 @@ function trendCellLabel(row, cell) {
           <dl>
             <div><dt>合法候选</dt><dd>{{ result.acceptedCandidateCount }}</dd></div>
             <div><dt>尝试组合</dt><dd>{{ result.attempts }}</dd></div>
-            <div v-if="result.betMode === 'COMPOUND_7_2'"><dt>展开注数</dt><dd>{{ result.expandedTicketCount }}</dd></div>
+            <div v-if="isCompoundMode(result.betMode)"><dt>展开注数</dt><dd>{{ result.expandedTicketCount }}</dd></div>
             <div v-else><dt>二码覆盖</dt><dd>{{ percentage(result.coverage.pairCoverageRatio) }}</dd></div>
-            <div v-if="result.betMode === 'COMPOUND_7_2'"><dt>合计金额</dt><dd>{{ result.totalStakeAmountYuan }} 元</dd></div>
+            <div v-if="isCompoundMode(result.betMode)"><dt>合计金额</dt><dd>{{ result.totalStakeAmountYuan }} 元</dd></div>
             <div v-else><dt>覆盖对数</dt><dd>{{ result.coverage.coveredPairCount }}/{{ result.coverage.possiblePairCount }}</dd></div>
           </dl>
         </div>
@@ -575,7 +646,7 @@ function trendCellLabel(row, cell) {
           >
             <header class="compound-header">
               <div>
-                <span>7+2 复式 · 第 {{ group.sequence }} 组</span>
+                <span>{{ group.redBalls.length }}+{{ group.blueBalls.length }} 复式 · 第 {{ group.sequence }} 组</span>
                 <small>每个六红子集均通过当前硬约束</small>
               </div>
               <b>结构分 {{ group.score }}</b>
@@ -583,13 +654,13 @@ function trendCellLabel(row, cell) {
 
             <div class="compound-ball-groups">
               <section>
-                <h3>红球 · 7 选 6</h3>
+                <h3>红球 · {{ group.redBalls.length }} 选 6</h3>
                 <div class="compound-balls compound-red">
                   <i v-for="number in group.redBalls" :key="number">{{ formatNumber(number) }}</i>
                 </div>
               </section>
               <section>
-                <h3>蓝球 · 2 选 1</h3>
+                <h3>蓝球 · {{ group.blueBalls.length }} 选 1</h3>
                 <div class="compound-balls compound-blue">
                   <i v-for="number in group.blueBalls" :key="number">{{ formatNumber(number) }}</i>
                 </div>
@@ -599,7 +670,10 @@ function trendCellLabel(row, cell) {
             <div class="compound-summary" aria-live="polite">
               <div><strong>{{ group.expandedTicketCount }}</strong><span>注</span></div>
               <div><strong>{{ group.stakeAmountYuan }}</strong><span>元</span></div>
-              <small>C(7,6) × C(2,1) = 14 注 · 每注 2 元</small>
+              <small>
+                C({{ group.redBalls.length }},6) × C({{ group.blueBalls.length }},1)
+                = {{ group.expandedTicketCount }} 注 · 每注 2 元
+              </small>
             </div>
 
             <div class="highlight-list">
@@ -810,12 +884,15 @@ function trendCellLabel(row, cell) {
         </div>
       </section>
 
-      <div v-if="expandedGroup" class="expanded-modal" role="dialog" aria-modal="true" aria-label="7+2 展开单式">
+      <div v-if="expandedGroup" class="expanded-modal" role="dialog" aria-modal="true" :aria-label="`${expandedGroup.redBalls.length}+${expandedGroup.blueBalls.length} 展开单式`">
         <div class="expanded-modal-panel">
           <header>
             <div>
-              <strong>第 {{ expandedGroup.sequence }} 组 · 14 注展开</strong>
-              <small>7 个六红子集 × 2 个蓝球</small>
+              <strong>第 {{ expandedGroup.sequence }} 组 · {{ expandedGroup.expandedTicketCount }} 注展开</strong>
+              <small>
+                {{ combinations(expandedGroup.redBalls.length, 6) }} 个六红子集
+                × {{ expandedGroup.blueBalls.length }} 个蓝球
+              </small>
             </div>
             <button type="button" aria-label="关闭展开明细" @click="expandedGroup = null">×</button>
           </header>

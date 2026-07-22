@@ -9,6 +9,8 @@ public record PredictionResponse(
         int historyRecordCount,
         int lookback,
         BetMode betMode,
+        Integer compoundRedCount,
+        Integer compoundBlueCount,
         RotationMode rotationMode,
         BlueSelectionMode blueSelectionMode,
         int acceptedCandidateCount,

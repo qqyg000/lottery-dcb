@@ -22,6 +22,12 @@ public class PredictionService {
 
     private static final String NOTICE = "仅按约束筛选随机组合，不提高任意单注的理论中奖概率，请理性购彩";
 
+    private static final int MAX_COMPOUND_GROUPS = 10;
+
+    private static final int MAX_COMPOUND_EXPANDED_TICKETS = 10000;
+
+    private static final int MAX_COMPOUND_SUBSET_EVALUATIONS = 300000;
+
     private final HistoryRepository historyRepository;
 
     private final SecureRandom secureRandom = new SecureRandom();
@@ -40,7 +46,7 @@ public class PredictionService {
         SplittableRandom redRandom = new SplittableRandom(mix(seed ^ 0x6A09E667F3BCC909L));
         SplittableRandom blueRandom = new SplittableRandom(mix(seed ^ 0xBB67AE8584CAA73BL));
 
-        if (request.getBetMode() == BetMode.COMPOUND_7_2) {
+        if (request.getBetMode().isCompound()) {
             return generateCompoundResponse(
                     request,
                     history,
@@ -93,6 +99,8 @@ public class PredictionService {
                 history.size(),
                 profile.recordCount(),
                 request.getBetMode(),
+                null,
+                null,
                 request.getRotationMode(),
                 request.getBlueSelectionMode(),
                 batch.candidates().size(),
@@ -124,12 +132,15 @@ public class PredictionService {
                 batch.candidates(),
                 request.getTicketCount()
         );
-        List<List<Integer>> bluePairs = selectBluePairs(
+        List<List<Integer>> blueGroups = selectBlueGroups(
                 request.getBlueSelectionMode(),
                 selected.size(),
+                request.getCompoundBlueCount(),
                 profile,
                 blueRandom
         );
+        int redCombinationCount = Math.toIntExact(combinations(request.getCompoundRedCount(), 6));
+        int expandedTicketsPerGroup = redCombinationCount * request.getCompoundBlueCount();
 
         List<CompoundPredictionGroup> groups = new ArrayList<>();
         List<Candidate> allExpandedCandidates = new ArrayList<>();
@@ -137,11 +148,11 @@ public class PredictionService {
         int ticketSequence = 1;
         for (int groupIndex = 0; groupIndex < selected.size(); groupIndex++) {
             CompoundCandidate groupCandidate = selected.get(groupIndex);
-            List<Integer> bluePair = bluePairs.get(groupIndex);
+            List<Integer> blueBalls = blueGroups.get(groupIndex);
             List<PredictionTicket> expandedTickets = new ArrayList<>();
             for (Candidate candidate : groupCandidate.expansions()) {
                 allExpandedCandidates.add(candidate);
-                for (int blueBall : bluePair) {
+                for (int blueBall : blueBalls) {
                     expandedTickets.add(new PredictionTicket(
                             ticketSequence++,
                             candidate.redBalls(),
@@ -156,15 +167,15 @@ public class PredictionService {
             groups.add(new CompoundPredictionGroup(
                     groupIndex + 1,
                     groupCandidate.redBalls(),
-                    bluePair,
+                    blueBalls,
                     round(groupCandidate.score(), 2),
-                    14,
-                    28,
+                    expandedTicketsPerGroup,
+                    expandedTicketsPerGroup * 2,
                     List.copyOf(expandedTickets),
                     List.of(
-                            "7 个红球任选 6 个",
-                            "2 个蓝球任选 1 个",
-                            "完整展开 14 注",
+                            request.getCompoundRedCount() + " 个红球任选 6 个",
+                            request.getCompoundBlueCount() + " 个蓝球任选 1 个",
+                            "完整展开 " + expandedTicketsPerGroup + " 注",
                             "每个六红组合均通过策略"
                     )
             ));
@@ -186,15 +197,18 @@ public class PredictionService {
                 baseCoverage.coveredPairCount(),
                 baseCoverage.possiblePairCount(),
                 baseCoverage.pairCoverageRatio(),
-                "7+2 复式完整展开后的实际红球二码覆盖率"
+                request.getCompoundRedCount() + "+" + request.getCompoundBlueCount()
+                        + " 复式完整展开后的实际红球二码覆盖率"
         );
-        int expandedTicketCount = groups.size() * 14;
+        int expandedTicketCount = groups.size() * expandedTicketsPerGroup;
         return new PredictionResponse(
                 seed,
                 Instant.now().toString(),
                 history.size(),
                 profile.recordCount(),
                 request.getBetMode(),
+                request.getCompoundRedCount(),
+                request.getCompoundBlueCount(),
                 RotationMode.NONE,
                 request.getBlueSelectionMode(),
                 batch.candidates().size(),
@@ -218,14 +232,25 @@ public class PredictionService {
                 request.getCandidatePoolSize(),
                 Math.max(60, request.getTicketCount() * 30)
         );
+        long redCombinationCount = combinations(request.getCompoundRedCount(), 6);
         int maxAttempts = Math.min(300000, Math.max(10000, target * 150));
+        int evaluationLimitedAttempts = (int) Math.max(
+                1,
+                MAX_COMPOUND_SUBSET_EVALUATIONS / redCombinationCount
+        );
+        maxAttempts = Math.min(maxAttempts, evaluationLimitedAttempts);
         Map<Long, CompoundCandidate> candidates = new LinkedHashMap<>();
         Map<String, Integer> rejectionStatistics = new LinkedHashMap<>();
         int attempts = 0;
 
         while (candidates.size() < target && attempts < maxAttempts) {
             attempts++;
-            List<Integer> redBalls = sampleNumbers(7, 33, profile.redWeights(), random);
+            List<Integer> redBalls = sampleNumbers(
+                    request.getCompoundRedCount(),
+                    33,
+                    profile.redWeights(),
+                    random
+            );
             List<List<Integer>> combinations = new ArrayList<>();
             enumerateCombinations(redBalls, 0, new ArrayList<>(), combinations);
             List<Candidate> expansions = new ArrayList<>();
@@ -471,22 +496,23 @@ public class PredictionService {
         return List.copyOf(result);
     }
 
-    private List<List<Integer>> selectBluePairs(
+    private List<List<Integer>> selectBlueGroups(
             BlueSelectionMode mode,
-            int count,
+            int groupCount,
+            int blueCount,
             HistoryProfile profile,
             SplittableRandom random
     ) {
-        List<List<Integer>> pairs = new ArrayList<>();
-        for (int index = 0; index < count; index++) {
+        List<List<Integer>> groups = new ArrayList<>();
+        for (int index = 0; index < groupCount; index++) {
             List<Integer> permutation = switch (mode) {
                 case RANDOM -> shuffledRange(16, random);
                 case FREQUENCY_BALANCED -> weightedBluePermutation(profile.blueFrequency(), random);
                 case COLD_HOT_MIX -> coldHotBluePermutation(profile.blueFrequency(), random);
             };
-            pairs.add(permutation.stream().limit(2).sorted().toList());
+            groups.add(permutation.stream().limit(blueCount).sorted().toList());
         }
-        return List.copyOf(pairs);
+        return List.copyOf(groups);
     }
 
     private List<Integer> weightedBluePermutation(int[] frequencies, SplittableRandom random) {
@@ -763,10 +789,35 @@ public class PredictionService {
         if (request == null || request.getStrategy() == null || request.getBetMode() == null) {
             throw new IllegalArgumentException("生成参数不能为空");
         }
-        if (request.getBetMode() == BetMode.COMPOUND_7_2 && request.getTicketCount() > 10) {
-            throw new IllegalArgumentException("7+2 复式每次最多生成 10 组");
+        if (request.getBetMode().isCompound()) {
+            validateCompoundRequest(request);
         }
         request.getStrategy().validateRanges();
+    }
+
+    private void validateCompoundRequest(PredictionRequest request) {
+        if (request.getTicketCount() > MAX_COMPOUND_GROUPS) {
+            throw new IllegalArgumentException("复式每次最多生成 " + MAX_COMPOUND_GROUPS + " 组");
+        }
+        if (request.getCompoundRedCount() < 6 || request.getCompoundRedCount() > 33) {
+            throw new IllegalArgumentException("复式红球数量必须为 6 到 33");
+        }
+        if (request.getCompoundBlueCount() < 1 || request.getCompoundBlueCount() > 16) {
+            throw new IllegalArgumentException("复式蓝球数量必须为 1 到 16");
+        }
+        if (request.getCompoundRedCount() == 6 && request.getCompoundBlueCount() == 1) {
+            throw new IllegalArgumentException("6+1 是单式，复式红球至少 7 个或蓝球至少 2 个");
+        }
+
+        long expandedTicketsPerGroup = combinations(request.getCompoundRedCount(), 6)
+                * request.getCompoundBlueCount();
+        long totalExpandedTickets = expandedTicketsPerGroup * request.getTicketCount();
+        if (totalExpandedTickets > MAX_COMPOUND_EXPANDED_TICKETS) {
+            throw new IllegalArgumentException(
+                    "当前配置将展开 " + totalExpandedTickets + " 注，最多允许 "
+                            + MAX_COMPOUND_EXPANDED_TICKETS + " 注，请减少红球、蓝球或复式组数"
+            );
+        }
     }
 
     private long mix(long value) {
