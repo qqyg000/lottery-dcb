@@ -619,7 +619,11 @@ function trendCellLabel(row, cell) {
             <div v-else><dt>覆盖对数</dt><dd>{{ result.coverage.coveredPairCount }}/{{ result.coverage.possiblePairCount }}</dd></div>
           </dl>
         </div>
-        <p class="coverage-note">{{ result.coverage.description }}</p>
+        <p class="coverage-note">
+          {{ result.coverage.description }}
+          · 池内三码 {{ result.coverage.coveredTripleCount }}/{{ result.coverage.possibleTripleCount }}
+          · 蓝球覆盖 {{ result.coverage.uniqueBlueCount }}/16（{{ percentage(result.coverage.blueCoverageRatio) }}）
+        </p>
 
         <div v-if="result.betMode === 'STANDARD'" class="ticket-grid">
           <article v-for="ticket in result.tickets" :key="ticket.sequence" class="ticket-card">

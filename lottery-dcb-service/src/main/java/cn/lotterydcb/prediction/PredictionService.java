@@ -92,7 +92,7 @@ public class PredictionService {
             ));
         }
 
-        CoverageInfo coverage = calculateCoverage(selected, batch.redPool(), request.getRotationMode());
+        CoverageInfo coverage = calculateCoverage(selected, batch.redPool(), request.getRotationMode(), blueBalls);
         return new PredictionResponse(
                 seed,
                 Instant.now().toString(),
@@ -189,7 +189,8 @@ public class PredictionService {
         CoverageInfo baseCoverage = calculateCoverage(
                 allExpandedCandidates,
                 compoundPool,
-                RotationMode.NONE
+                RotationMode.NONE,
+                blueGroups.stream().flatMap(List::stream).toList()
         );
         CoverageInfo coverage = new CoverageInfo(
                 baseCoverage.redPool(),
@@ -198,7 +199,12 @@ public class PredictionService {
                 baseCoverage.possiblePairCount(),
                 baseCoverage.pairCoverageRatio(),
                 request.getCompoundRedCount() + "+" + request.getCompoundBlueCount()
-                        + " 复式完整展开后的实际红球二码覆盖率"
+                        + " 复式完整展开的池内覆盖；蓝球跨组优先覆盖未使用号码，覆盖比例不是整体中奖率",
+                baseCoverage.coveredTripleCount(),
+                baseCoverage.possibleTripleCount(),
+                baseCoverage.tripleCoverageRatio(),
+                baseCoverage.uniqueBlueCount(),
+                baseCoverage.blueCoverageRatio()
         );
         int expandedTicketCount = groups.size() * expandedTicketsPerGroup;
         return new PredictionResponse(
@@ -433,6 +439,20 @@ public class PredictionService {
     }
 
     private List<Candidate> selectPairCoverage(List<Candidate> candidates, int count) {
+        List<Candidate> initial = selectPairCoverageSeed(candidates, count);
+        Map<Long, Integer> indexes = new HashMap<>();
+        for (int index = 0; index < candidates.size(); index++) {
+            indexes.put(candidates.get(index).mask(), index);
+        }
+        List<Integer> optimized = RedCoverageOptimizer.optimize(
+                candidates.stream().map(Candidate::redBalls).toList(),
+                candidates.stream().mapToDouble(Candidate::score).toArray(),
+                initial.stream().map(candidate -> indexes.get(candidate.mask())).toList()
+        );
+        return optimized.stream().map(candidates::get).toList();
+    }
+
+    private List<Candidate> selectPairCoverageSeed(List<Candidate> candidates, int count) {
         List<Candidate> remaining = new ArrayList<>(candidates);
         List<Candidate> selected = new ArrayList<>();
         Set<Long> coveredPairs = new HashSet<>();
@@ -504,13 +524,21 @@ public class PredictionService {
             SplittableRandom random
     ) {
         List<List<Integer>> groups = new ArrayList<>();
+        int[] usages = new int[17];
         for (int index = 0; index < groupCount; index++) {
             List<Integer> permutation = switch (mode) {
                 case RANDOM -> shuffledRange(16, random);
                 case FREQUENCY_BALANCED -> weightedBluePermutation(profile.blueFrequency(), random);
                 case COLD_HOT_MIX -> coldHotBluePermutation(profile.blueFrequency(), random);
             };
-            groups.add(permutation.stream().limit(blueCount).sorted().toList());
+            // 稳定排序保留所选模式的偏好，同一组内不重复，跨组先覆盖使用次数较少的蓝球
+            List<Integer> group = permutation.stream()
+                    .sorted(Comparator.comparingInt(number -> usages[number]))
+                    .limit(blueCount)
+                    .sorted()
+                    .toList();
+            group.forEach(number -> usages[number]++);
+            groups.add(group);
         }
         return List.copyOf(groups);
     }
@@ -531,10 +559,8 @@ public class PredictionService {
     }
 
     private List<Integer> coldHotBluePermutation(int[] frequencies, SplittableRandom random) {
-        List<Integer> sorted = new ArrayList<>();
-        for (int number = 1; number <= 16; number++) {
-            sorted.add(number);
-        }
+        // 先按种子打散同频号码，避免小样本时冷热并列总是偏向固定号码
+        List<Integer> sorted = new ArrayList<>(shuffledRange(16, random));
         sorted.sort(Comparator.comparingInt(number -> frequencies[number]));
         List<Integer> mixed = new ArrayList<>();
         int left = 0;
@@ -583,23 +609,28 @@ public class PredictionService {
     private CoverageInfo calculateCoverage(
             List<Candidate> selected,
             List<Integer> matrixPool,
-            RotationMode mode
+            RotationMode mode,
+            List<Integer> blueBalls
     ) {
         Set<Integer> union = new LinkedHashSet<>();
         Set<Long> coveredPairs = new HashSet<>();
+        Set<Long> coveredTriples = new HashSet<>();
         selected.forEach(candidate -> {
             union.addAll(candidate.redBalls());
             coveredPairs.addAll(pairs(candidate.redBalls()));
+            coveredTriples.addAll(triples(candidate.redBalls()));
         });
         List<Integer> pool = matrixPool.isEmpty()
                 ? union.stream().sorted().toList()
                 : matrixPool.stream().sorted().toList();
         int possiblePairs = pool.size() < 2 ? 0 : pool.size() * (pool.size() - 1) / 2;
         double ratio = possiblePairs == 0 ? 0.0 : (double) coveredPairs.size() / possiblePairs;
+        int possibleTriples = Math.toIntExact(combinations(pool.size(), 3));
+        int uniqueBlueCount = (int) blueBalls.stream().distinct().count();
         String description = switch (mode) {
             case NONE -> "独立优选组合的实际二码覆盖率";
             case BALANCED_COVERAGE -> "矩阵红球池内号码使用均衡后的实际二码覆盖率";
-            case PAIR_COVERAGE -> "矩阵红球池内贪心二码覆盖率，不代表中奖保证";
+            case PAIR_COVERAGE -> "矩阵池内二码与三码覆盖经局部替换优化，池外号码未覆盖，不代表中奖保证";
         };
         return new CoverageInfo(
                 pool,
@@ -607,7 +638,12 @@ public class PredictionService {
                 coveredPairs.size(),
                 possiblePairs,
                 round(ratio, 4),
-                description
+                description,
+                coveredTriples.size(),
+                possibleTriples,
+                possibleTriples == 0 ? 0.0 : round((double) coveredTriples.size() / possibleTriples, 4),
+                uniqueBlueCount,
+                uniqueBlueCount / 16.0
         );
     }
 
@@ -747,6 +783,19 @@ public class PredictionService {
             mask |= 1L << (number - 1);
         }
         return mask;
+    }
+
+    private Set<Long> triples(List<Integer> redBalls) {
+        Set<Long> triples = new HashSet<>();
+        for (int left = 0; left < redBalls.size(); left++) {
+            for (int middle = left + 1; middle < redBalls.size(); middle++) {
+                for (int right = middle + 1; right < redBalls.size(); right++) {
+                    triples.add(((long) redBalls.get(left) << 12)
+                            | ((long) redBalls.get(middle) << 6) | redBalls.get(right));
+                }
+            }
+        }
+        return triples;
     }
 
     private boolean usesEveryPoolNumber(List<Candidate> candidates, List<Integer> pool) {

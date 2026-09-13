@@ -134,6 +134,11 @@ class PredictionServiceTest {
         assertEquals(21, first.coverage().coveredPairCount());
         assertEquals(21, first.coverage().possiblePairCount());
         assertEquals(1.0, first.coverage().pairCoverageRatio());
+        assertEquals(35, first.coverage().coveredTripleCount());
+        assertEquals(35, first.coverage().possibleTripleCount());
+        assertEquals(1.0, first.coverage().tripleCoverageRatio());
+        assertEquals(2, first.coverage().uniqueBlueCount());
+        assertEquals(0.125, first.coverage().blueCoverageRatio());
     }
 
     @Test
@@ -296,6 +301,74 @@ class PredictionServiceTest {
         strategy.setMinDistinctTails(1);
         strategy.setMaxSameTailCount(6);
         strategy.setAvoidRegularPatterns(false);
+    }
+
+    @Test
+    void compoundGroupsShouldCoverDifferentBluesBeforeRepeatingInEveryMode() {
+        PredictionService service = createService();
+        for (BlueSelectionMode mode : BlueSelectionMode.values()) {
+            PredictionRequest request = new PredictionRequest();
+            request.setBetMode(BetMode.COMPOUND);
+            request.setTicketCount(2);
+            request.setCandidatePoolSize(100);
+            request.setBlueSelectionMode(mode);
+            request.setSeed(88L);
+
+            PredictionResponse response = service.generate(request);
+
+            assertEquals(4, response.compoundGroups().stream()
+                    .flatMap(group -> group.blueBalls().stream()).distinct().count(), mode.name());
+            assertEquals(4, response.coverage().uniqueBlueCount());
+            assertEquals(0.25, response.coverage().blueCoverageRatio());
+            assertEquals(28, response.expandedTicketCount());
+            assertEquals(56, response.totalStakeAmountYuan());
+            assertEquals(response.compoundGroups(), service.generate(request).compoundGroups());
+        }
+    }
+
+    @Test
+    void blueUsageShouldStayBalancedAcrossCycleBoundariesWithoutGroupDuplicates() {
+        PredictionService service = createService();
+        for (BlueSelectionMode mode : BlueSelectionMode.values()) {
+            PredictionRequest request = new PredictionRequest();
+            request.setBetMode(BetMode.COMPOUND);
+            request.setCompoundRedCount(6);
+            request.setCompoundBlueCount(3);
+            request.setTicketCount(10);
+            request.setCandidatePoolSize(100);
+            request.setBlueSelectionMode(mode);
+            request.setSeed(16L);
+
+            PredictionResponse response = service.generate(request);
+
+            int[] usages = new int[17];
+            response.compoundGroups().forEach(group -> {
+                assertEquals(3, group.blueBalls().stream().distinct().count());
+                group.blueBalls().forEach(number -> usages[number]++);
+            });
+            for (int number = 1; number <= 16; number++) {
+                assertTrue(usages[number] == 1 || usages[number] == 2, mode.name());
+            }
+            assertEquals(16, response.coverage().uniqueBlueCount());
+            assertEquals(1.0, response.coverage().blueCoverageRatio());
+            assertEquals(30, response.tickets().size());
+        }
+    }
+
+    @Test
+    void fullBlueCompoundShouldKeepEveryGroupComplete() {
+        PredictionRequest request = new PredictionRequest();
+        request.setBetMode(BetMode.COMPOUND);
+        request.setCompoundRedCount(6);
+        request.setCompoundBlueCount(16);
+        request.setTicketCount(2);
+        request.setCandidatePoolSize(100);
+        request.setSeed(33L);
+
+        PredictionResponse response = createService().generate(request);
+
+        assertEquals(32, response.expandedTicketCount());
+        response.compoundGroups().forEach(group -> assertEquals(16, group.blueBalls().stream().distinct().count()));
     }
 
     private PredictionService createService() {

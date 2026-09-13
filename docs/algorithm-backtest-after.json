@@ -1,0 +1,83 @@
+{
+  "historyRecordCount": 2049,
+  "historySha256": "1154dd501b85e0286b895f438ed8f296fadaaa8d2135ae1e4b0452a060affafa",
+  "firstIssue": "2025043",
+  "lastIssue": "2026091",
+  "drawCount": 200,
+  "seedsPerDraw": 3,
+  "lookback": 100,
+  "candidatePoolSize": 5000,
+  "seedRule": "20260913 + issue * 31 + repetition * 1000003; repetition starts at 0",
+  "strategy": {
+    "maxConsecutivePairs": 1,
+    "maxConsecutiveRun": 2,
+    "minOddCount": 2,
+    "maxOddCount": 4,
+    "minSmallCount": 2,
+    "maxSmallCount": 4,
+    "minSum": 75,
+    "maxSum": 130,
+    "minZoneCount": 1,
+    "maxZoneCount": 3,
+    "minPrimeCount": 1,
+    "maxPrimeCount": 3,
+    "minSpan": 18,
+    "maxGap": 12,
+    "minAcValue": 5,
+    "maxAcValue": 10,
+    "minDistinctTails": 4,
+    "maxSameTailCount": 2,
+    "avoidRegularPatterns": true
+  },
+  "note": "每期只使用更早历史；同一期多种子不是独立开奖样本；红球指标是至少一注达到阈值，蓝球指标是整批至少覆盖一次；均匀随机基线使用相同注数、无形态约束的去重单式，未匹配复式结构；历史结果不保证未来表现",
+  "scenarios": [
+    {
+      "mode": "STANDARD",
+      "ticketsPerDraw": 8,
+      "generationFailures": 0,
+      "algorithm": {
+        "cases": 600,
+        "blueHitRate": 0.53,
+        "atLeastThreeRedHitRate": 0.16333333333333333,
+        "atLeastFourRedHitRate": 0.016666666666666666,
+        "averageBlueCoverage": 8.0,
+        "averagePairCoverage": 35.973333333333336,
+        "averageTripleCoverage": 81.80166666666666
+      },
+      "uniformRandomSameBudget": {
+        "cases": 600,
+        "blueHitRate": 0.36833333333333335,
+        "atLeastThreeRedHitRate": 0.36666666666666664,
+        "atLeastFourRedHitRate": 0.035,
+        "averageBlueCoverage": 6.363333333333333,
+        "averagePairCoverage": 109.02166666666666,
+        "averageTripleCoverage": 158.12166666666667
+      },
+      "elapsedSeconds": 1.2461301
+    },
+    {
+      "mode": "COMPOUND",
+      "ticketsPerDraw": 28,
+      "generationFailures": 0,
+      "algorithm": {
+        "cases": 600,
+        "blueHitRate": 0.245,
+        "atLeastThreeRedHitRate": 0.17333333333333334,
+        "atLeastFourRedHitRate": 0.018333333333333333,
+        "averageBlueCoverage": 4.0,
+        "averagePairCoverage": 42.0,
+        "averageTripleCoverage": 70.0
+      },
+      "uniformRandomSameBudget": {
+        "cases": 600,
+        "blueHitRate": 0.8283333333333334,
+        "atLeastThreeRedHitRate": 0.8116666666666666,
+        "atLeastFourRedHitRate": 0.12333333333333334,
+        "averageBlueCoverage": 13.29,
+        "averagePairCoverage": 291.725,
+        "averageTripleCoverage": 533.0283333333333
+      },
+      "elapsedSeconds": 22.548494
+    }
+  ]
+}
