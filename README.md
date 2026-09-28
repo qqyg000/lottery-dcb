@@ -14,55 +14,39 @@ lottery-dcb
 └── .gitignore
 ```
 
-## 已实现功能
+## 主要功能
 
-- 支持单式、旋转矩阵和可配置复式；复式红球可选 6–33 个、蓝球可选 1–16 个，默认生成 2 组 7+2
-- 复式按 `C(红球数, 6) × C(蓝球数, 1)` 展开并计算注数与金额，单次最多展开 10000 注
+- 支持单式、旋转矩阵和可配置复式，默认生成 2 组 7+2，自动计算展开注数与金额
 - 提供奇偶、大小、和值、三区、质合、连号、间隔、AC 值、尾数和规律图案等硬约束
 - 支持蓝球随机、频次平衡、冷热交替，以及独立优选、均衡覆盖、二码覆盖三种矩阵模式
-- 复式蓝球跨组优先去重，覆盖全部 16 个号码后均衡复用；冷热并列按种子打散
-- 二码矩阵增加有限次局部替换，在二码和三码覆盖均不下降的前提下改进组合；结果展示池内三码与蓝球覆盖
+- 复式蓝球跨组优先去重，覆盖全部 16 个号码后均衡复用；矩阵结果展示池内二码、三码与蓝球覆盖
 - 展示红蓝球频次、组合指标、号码覆盖率、遗漏走势和历史开奖，结果可一键复制
-- 启动时增量同步中国福利彩票历史数据；官方接口不可用时自动使用本地数据
-- 单屏响应式界面通过顶部导航切换功能，超出内容在当前区域内滚动
-- Maven 自动安装固定版本的 Node/npm，完成前后端测试、构建并生成一体化可执行 JAR
+- 启动时增量同步中国福利彩票历史数据，支持手动更新；接口不可用时使用本地数据
 
-## 页面使用说明
+页面通过顶部导航切换首页、生成结果、历史统计、号码走势和开奖数据。首页配置生成参数与约束，生成后可查看号码、注数、金额和覆盖情况
 
-- **首页**：配置复式或单式生成参数、历史观察期数、蓝球选择方式和各项硬约束。复式可直接输入红球数和蓝球数，默认打开 `7+2 复式`，复式组数为 `2`
-- **生成结果**：生成成功后出现在顶部导航中。可查看组合结构、展开注数、金额与约束摘要，也可复制全部号码
-- **历史统计**：查看红球频次、活跃号码、沉寂号码、蓝球频次和样本摘要
-- **号码走势**：红球与蓝球分别切换展示；最新一期在上，可显示或隐藏遗漏值
-- **开奖数据**：查看当前加载的历史开奖、数据总期数、最新期号、最近同步时间和同步状态，可手动触发更新
+## 快速启动
 
+需要 JDK 17+、Maven 3.6.3+。Maven 自动安装固定版本的 Node.js 和 npm，无需手动安装；前端单独开发时需要 Node.js 22.18+
 
-## 环境要求
-
-- JDK 17+
-- Maven 3.6.3+
-- 前端单独开发时需要 Node.js 22.18+
-
-## 一体化打包与运行
-
-在项目根目录执行：
+在项目根目录构建并运行：
 
 ```bash
 mvn clean package
 java -jar lottery-dcb.jar
 ```
 
-打开 `http://localhost:8080`
-
-默认端口来自 `SERVER_PORT`，未配置时为 `8080`。需要临时改用其他端口时可执行：
+启动后访问 <http://localhost:8080>。默认端口为 `8080`，可通过 `SERVER_PORT` 或启动参数修改：
 
 ```bash
 java -jar lottery-dcb.jar --server.port=8081
 ```
 
-首次打包会下载固定版本的 Node.js 和 npm，后续使用本地 Maven 缓存。根目录和 `lottery-dcb-service/target` 中都会生成 `lottery-dcb.jar`，根目录版本可直接运行。Windows 建议使用 `run-windows.cmd` 启动；在 IDEA 中运行前，先执行一次 `mvn clean package` 以生成前端资源
+构建包含前后端测试与编译，任一步失败都会终止打包。产物为根目录和 `lottery-dcb-service/target` 下的 `lottery-dcb.jar`
 
+Windows 可使用 `run-windows.cmd` 启动；在 IDEA 中运行前，先完整打包一次以生成前端资源
 
-## 本地开发
+## 本地开发与测试
 
 前后端分离开发时，后端只提供 API：
 
@@ -78,49 +62,35 @@ npm ci
 npm run dev
 ```
 
-此模式通常访问 `http://localhost:5173`，Vite 会把 `/api` 代理到后端 `http://localhost:8080`。如需访问一体化页面，请运行完整打包后的 JAR
+访问 <http://localhost:5173>，Vite 将 `/api` 代理到 `http://localhost:8080`。完整页面也可通过打包后的 JAR 访问
 
-
-## 测试与构建检查
-
-仅检查前端时执行：
+在前端目录执行测试与构建检查：
 
 ```bash
-cd lottery-dcb-web
-npm ci
 npm test
 npm run build
 ```
 
-完整检查并生成根目录可执行包时执行：
+## 算法与回测
 
-```bash
-mvn clean package
-```
+AC 值为不同两两差值的个数减去 `(红球个数 - 1)`；6 个红球的 AC 值范围为 0–10，默认筛选范围为 5–10
 
-完整 Maven 构建会依次执行前端测试与构建、Java 编译和后端测试，任一步失败都会终止打包
-
-### 算法回测
-
-Windows 在项目根目录执行：
+Windows 在项目根目录执行离线回测：
 
 ```powershell
 ./scripts/Invoke-PredictionBacktest.ps1 -DrawCount 200 -SeedsPerDraw 3
 ```
 
-默认读取 `config/ssq-history.json`，每期只使用更早的 100 期数据，比较 8 注二码矩阵、2 组 7+2 复式及相同注数的均匀随机单式。失败期按零命中计入分母，结果保存到 `target/prediction-backtest.json`。通过 `-HistoryFile`、`-OutputFile` 可指定输入输出，至少需要 101 期有效数据；内置 seed 数据不足以回测
+默认读取 `config/ssq-history.json`，每期仅使用之前 100 期，比较 8 注二码矩阵、2 组 7+2 复式与相同注数的随机单式，失败期按零命中计入分母。结果保存到 `target/prediction-backtest.json`，可用 `-HistoryFile`、`-OutputFile` 指定输入输出。至少需要 101 期有效数据，内置 seed 数据不足以回测
 
-回测分别统计整批蓝球命中、至少一注命中 3 个/4 个红球及实际覆盖数量，不把结构分、池内覆盖率当成中奖概率。同一期多种子不构成独立开奖样本，不能用历史提升承诺未来效果。修改前后完整结果及限制见 [算法优化与回测记录](docs/algorithm-optimization.md)
-
+回测分别统计红蓝球命中与覆盖数量；池内覆盖率不等于中奖概率，同一期多种子也不是独立开奖样本。算法细节、对比结果与限制见 [算法优化与回测记录](docs/algorithm-optimization.md)
 
 ## 访问与编码排查
 
 - 打包前先停止正在占用 `lottery-dcb.jar` 或目标端口的旧进程，完成后运行根目录的新 JAR
-- 首页和静态资源使用 `Cache-Control: no-store`，不存在的资源返回 HTTP 404
-- HTTP 响应和文件日志使用 UTF-8；启动首行会输出实际控制台编码
-- 如需覆盖自动探测结果，可设置 `CONSOLE_LOG_CHARSET=UTF-8` 或 `CONSOLE_LOG_CHARSET=GBK`
+- HTTP 响应和文件日志使用 UTF-8，启动首行输出实际控制台编码；乱码时可设置 `CONSOLE_LOG_CHARSET=UTF-8` 或 `CONSOLE_LOG_CHARSET=GBK`
 
-## 历史数据配置
+## 配置与数据
 
 默认配置位于 `lottery-dcb-service/src/main/resources/application.yml`：
 
@@ -131,10 +101,9 @@ lottery:
     update-enabled: ${LOTTERY_HISTORY_UPDATE_ENABLED:true}
 ```
 
-可通过环境变量修改文件路径或关闭联网更新。`./config` 相对于启动命令的工作目录；内置 seed 数据仅用于首次初始化和离线降级，成功联网后会补全历史记录
+通过环境变量可修改路径或关闭联网更新，`./config` 相对于启动命令的工作目录。数据来自中国福利彩票官网往期开奖接口，支持超时重试与本地降级；内置 seed 数据仅用于首次初始化和离线降级，联网成功后补全历史记录
 
-
-## 核心接口
+## 主要接口
 
 | 方法 | 路径 | 说明 |
 | --- | --- | --- |
@@ -146,29 +115,11 @@ lottery:
 | POST | `/api/predictions/generate` | 生成单式、旋转矩阵或可配置复式 |
 
 - `betMode=COMPOUND`：`compoundRedCount` 为红球数（6–33），`compoundBlueCount` 为蓝球数（1–16），`ticketCount` 为复式组数（1–10）
-- `6+1` 属于单式；复式至少有一项超过单式数量，单次最多展开 10000 注
+- `6+1` 属于单式；复式至少有一项超过单式数量，按 `C(红球数, 6) × 蓝球数` 展开，单次最多 10000 注
 - 旧版 `COMPOUND_7_2` 仍兼容；未传 `betMode` 时按 `STANDARD` 处理
 - 复现种子必须位于 JavaScript 安全整数范围 `-9007199254740991` 至 `9007199254740991`
-- `coverage` 新增 `coveredTripleCount`、`possibleTripleCount`、`tripleCoverageRatio`，分母为当前红球池的 `C(n, 3)`，不是全部开奖空间
-- `coverage.uniqueBlueCount` 为整批不同蓝球数量，`blueCoverageRatio=uniqueBlueCount/16`，不是整体中奖率
-- 原请求参数、注数和金额计算保持兼容；算法更新后相同种子的号码可能与旧版本不同，同一版本、同一历史数据和同一参数仍可复现
-
-
-## AC 值定义
-
-6 个红球两两差值去重后的数量减去 5，即：
-
-```text
-AC = 不同两两差值个数 - (红球个数 - 1)
-```
-
-6 个红球的 AC 值范围为 0–10，默认筛选范围为 5–10
-
-## 数据源说明
-
-
-
-历史同步使用中国福利彩票官网往期开奖页面内部接口。该接口可能限流或调整字段，项目通过超时、有限重试、原子写入和本地降级保证可用性
+- `coverage` 中的 `coveredTripleCount`、`possibleTripleCount`、`tripleCoverageRatio` 表示池内三码覆盖，分母为当前红球池的 `C(n, 3)`；`uniqueBlueCount` 为整批不同蓝球数，`blueCoverageRatio=uniqueBlueCount/16`，均不代表整体中奖率
+- 同一版本、历史数据、参数和种子可复现结果；算法更新后，相同种子的号码可能变化
 
 ## 法律免责声明
 
